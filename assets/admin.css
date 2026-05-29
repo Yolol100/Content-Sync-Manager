@@ -1,0 +1,102 @@
+body.wp-admin.edit-php.post-type-page,
+            body.wp-admin.edit-php.post-type-post{padding-bottom:86px}
+            .column-dca_acf_textblock{width:200px}.dca-open-acf-textblock{white-space:nowrap}
+            .dca-badge{display:inline-block;margin-top:6px;padding:2px 7px;border-radius:999px;font-size:11px;line-height:1.5;font-weight:600;white-space:nowrap}
+            .dca-badge-updated{background:#e8f0fe;color:#135e96}
+            .dca-badge-not-updated{background:#fcf0f1;color:#b32d2e}
+            .dca-badge-green{background:#e7f7ed;color:#008a20}
+            .dca-badge-yellow{background:#fff8e5;color:#996800}
+            .dca-badge-muted{background:#f6f7f7;color:#646970}
+    
+            .dca-toolbar{
+                position:fixed;
+                left:50%;
+                bottom:22px;
+                transform:translateX(-50%);
+                z-index:99999;
+                display:flex;
+                flex-direction:row;
+                align-items:center;
+                flex-wrap:wrap;
+                justify-content:center;
+                gap:6px;
+                width:auto;
+                max-width:min(860px,calc(100vw - 48px));
+                padding:8px 10px;
+                background:#fff;
+                border:1px solid #c3c4c7;
+                border-radius:7px;
+                box-shadow:0 8px 28px rgba(0,0,0,.18);
+                overflow:visible;
+                white-space:normal;
+            }
+    
+            .dca-toolbar-title{flex:0 0 auto;font-weight:600;white-space:nowrap;margin-right:2px}
+            .dca-toolbar .button{flex:0 0 auto;white-space:nowrap;min-height:32px;padding:3px 10px}
+    
+            .dca-modal{position:fixed;z-index:100000;inset:0;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,.45)}
+            .dca-modal.is-active{display:flex}
+            .dca-box{width:min(1100px,calc(100vw - 40px));max-height:calc(100vh - 60px);background:#fff;border-radius:4px;box-shadow:0 20px 60px rgba(0,0,0,.25);overflow:hidden}
+            .dca-head{display:flex;align-items:center;justify-content:space-between;gap:20px;padding:14px 18px;border-bottom:1px solid #dcdcde;background:#f6f7f7}
+            .dca-head h2{margin:0;font-size:16px}
+            .dca-content{padding:18px}
+            .dca-textarea{width:100%;min-height:520px;resize:vertical;font-family:Consolas,Monaco,monospace;font-size:13px;line-height:1.5;white-space:pre-wrap}
+            .dca-actions{display:flex;align-items:center;gap:10px;margin-top:12px;flex-wrap:wrap}
+            .dca-status{font-weight:600}
+            .dca-status.is-success{color:#008a20}
+            .dca-status.is-error{color:#d63638}
+            .dca-warning{margin:0 0 12px;padding:10px 12px;border-left:4px solid #dba617;background:#fcf9e8}
+            .dca-preview{display:none;max-height:260px;overflow:auto;margin-top:14px;border:1px solid #dcdcde;background:#fff}
+            .dca-preview table{width:100%;border-collapse:collapse}
+            .dca-preview th,.dca-preview td{padding:9px 10px;border-bottom:1px solid #dcdcde;text-align:left;vertical-align:top}
+            .dca-preview th{background:#f6f7f7}
+            .dca-ok{color:#008a20;font-weight:600}
+            .dca-error{color:#d63638;font-weight:600}.dca-partial{color:#996800;font-weight:600}
+    
+            .dca-toast{
+                position:fixed;
+                right:24px;
+                bottom:22px;
+                z-index:100001;
+                display:none;
+                max-width:360px;
+                padding:12px 14px;
+                background:#1d2327;
+                color:#fff;
+                border-radius:4px;
+                box-shadow:0 8px 22px rgba(0,0,0,.22);
+                font-size:13px;
+                line-height:1.4;
+            }
+    
+            .dca-toast.is-active{display:block}
+    
+            @media(max-width:782px){
+                body.wp-admin.edit-php.post-type-page,
+                body.wp-admin.edit-php.post-type-post{padding-bottom:96px}
+    
+                .dca-toolbar{
+                    left:12px;
+                    right:12px;
+                    bottom:12px;
+                    transform:none;
+                    width:auto;
+                    max-width:none;
+                    flex-direction:row;
+                    align-items:center;
+                    flex-wrap:wrap;
+                    justify-content:center;
+                    overflow:visible;
+                }
+    
+                .dca-toolbar .button{width:auto;text-align:center}
+    
+                .dca-actions{flex-direction:column;align-items:stretch}
+                .dca-actions .button{width:100%;text-align:center}
+    
+                .dca-toast{
+                    right:12px;
+                    bottom:12px;
+                    max-width:calc(100vw - 24px);
+                }
+            }
