@@ -342,41 +342,33 @@ function dca_tb_content_badge($post_id) {
         );
     }
 
-    if (!function_exists('get_field')) {
+    if (!function_exists('get_field_objects')) {
         return '<span class="dca-badge dca-badge-muted">ACF niet actief</span>';
     }
 
-    $blocks = 0;
-    $faq = 0;
-    $usp = 0;
+    $acf_fields = dca_tb_get_detected_acf_fields($post_id);
+    $acf_total = count($acf_fields);
+    $acf_filled = 0;
 
-    for ($i = 1; $i <= 3; $i++) {
-        if (trim((string) get_field('titel_' . $i, $post_id)) || trim((string) get_field('tekst_' . $i, $post_id))) {
-            $blocks++;
+    foreach ($acf_fields as $field) {
+        $value = $field['value'] ?? '';
+        if (is_array($value) || is_object($value)) {
+            if (!empty((array) $value)) {
+                $acf_filled++;
+            }
+        } elseif (trim((string) $value) !== '') {
+            $acf_filled++;
         }
     }
 
-    for ($i = 1; $i <= 4; $i++) {
-        if (trim((string) get_field('faqtitel_' . $i, $post_id)) || trim((string) get_field('faqtekst_' . $i, $post_id))) {
-            $faq++;
-        }
-    }
-
-    foreach (dca_tb_usp_fields() as $field) {
-        if (trim((string) get_field($field, $post_id))) {
-            $usp++;
-        }
-    }
-
-    $complete = ($blocks === 3 && $faq === 4 && $usp === 4 && $yoast_title !== '' && $yoast_desc !== '');
+    $complete = ($acf_total > 0 && $acf_filled === $acf_total && $yoast_title !== '' && $yoast_desc !== '');
     $class = $complete ? 'dca-badge-green' : 'dca-badge-yellow';
 
     return sprintf(
-        '<span class="dca-badge %s">%d blokken / %d FAQ / %d USP / Yoast %s / %d media</span>',
+        '<span class="dca-badge %s">ACF %d/%d / Yoast %s / %d media</span>',
         esc_attr($class),
-        $blocks,
-        $faq,
-        $usp,
+        absint($acf_filled),
+        absint($acf_total),
         ($yoast_title && $yoast_desc) ? 'ok' : 'mist',
         absint($media_count)
     );
@@ -662,10 +654,18 @@ function dca_tb_collect_media_ids($post_id) {
         }
     }
 
-    if (function_exists('get_fields')) {
-        $fields = get_fields($post_id);
-        if (is_array($fields)) {
-            dca_tb_collect_media_ids_from_value($fields, $ids);
+    /**
+     * ACF media: use detected unformatted field values instead of get_fields()
+     * with formatted arrays. This keeps the export tied to fields that actually
+     * belong to the edited object and avoids pulling unrelated theme/global
+     * images into the MEDIA block.
+     */
+    if (function_exists('get_field_objects')) {
+        foreach (dca_tb_get_detected_acf_fields($post_id) as $field) {
+            $type = isset($field['type']) ? sanitize_key($field['type']) : '';
+            if (in_array($type, ['image', 'file', 'gallery'], true)) {
+                dca_tb_collect_media_ids_from_value($field['value'] ?? '', $ids);
+            }
         }
     }
 
@@ -1227,6 +1227,321 @@ function dca_tb_save_media_items($post_id, $textblock) {
     return $result;
 }
 
+
+function dca_tb_acf_export_end_markers() {
+    return ['YOAST SEO', 'SAMENVATTING', 'UITGELICHTE AFBEELDING', 'MEDIA'];
+}
+
+function dca_tb_acf_attachment_id_from_value($value) {
+    if (is_numeric($value)) {
+        return absint($value);
+    }
+
+    if (is_array($value)) {
+        foreach (['ID', 'id'] as $key) {
+            if (isset($value[$key]) && is_numeric($value[$key])) {
+                return absint($value[$key]);
+            }
+        }
+    }
+
+    return 0;
+}
+
+function dca_tb_acf_attachment_to_text($value) {
+    $attachment_id = dca_tb_acf_attachment_id_from_value($value);
+
+    if (!$attachment_id && is_string($value) && function_exists('attachment_url_to_postid')) {
+        $attachment_id = absint(attachment_url_to_postid(esc_url_raw($value)));
+    }
+
+    if (!$attachment_id) {
+        return 'Geen afbeelding/bestand geselecteerd.\nAttachment ID:\n0';
+    }
+
+    $url = '';
+    if (is_string($value) && preg_match('#^https?://#i', $value)) {
+        $url = esc_url_raw($value);
+    } elseif (is_array($value) && !empty($value['url'])) {
+        $url = esc_url_raw($value['url']);
+    } else {
+        $url = wp_get_attachment_url($attachment_id);
+    }
+
+    $out = [
+        'Attachment ID:',
+        (string) $attachment_id,
+        '',
+        'URL:',
+        $url ? $url : '',
+    ];
+
+    if (wp_attachment_is_image($attachment_id)) {
+        $out[] = '';
+        $out[] = 'Alt text:';
+        $out[] = dca_tb_text(get_post_meta($attachment_id, '_wp_attachment_image_alt', true));
+    }
+
+    return rtrim(implode("\n", $out));
+}
+
+function dca_tb_acf_gallery_to_text($value) {
+    if (!is_array($value)) {
+        return '';
+    }
+
+    $ids = [];
+
+    foreach ($value as $item) {
+        $id = dca_tb_acf_attachment_id_from_value($item);
+        if ($id) {
+            $ids[] = $id;
+        }
+    }
+
+    if (!$ids) {
+        return 'Geen afbeeldingen geselecteerd.\nAttachment IDs:\n';
+    }
+
+    return 'Attachment IDs:\n' . implode(', ', array_map('absint', array_unique($ids)));
+}
+
+function dca_tb_acf_value_to_text($value, $type = '') {
+    $type = sanitize_key($type);
+
+    if (in_array($type, ['image', 'file'], true)) {
+        return dca_tb_acf_attachment_to_text($value);
+    }
+
+    if ($type === 'gallery') {
+        return dca_tb_acf_gallery_to_text($value);
+    }
+
+    if (is_array($value) || is_object($value)) {
+        $json = wp_json_encode($value, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        return $json ? $json : '';
+    }
+
+    if (is_bool($value)) {
+        return $value ? '1' : '0';
+    }
+
+    return dca_tb_text($value);
+}
+
+function dca_tb_get_detected_acf_fields($post_id) {
+    $post_id = absint($post_id);
+
+    if (!$post_id || !function_exists('get_field_objects')) {
+        return [];
+    }
+
+    $objects = get_field_objects($post_id, false, true);
+
+    if (!is_array($objects)) {
+        return [];
+    }
+
+    $fields = [];
+
+    foreach ($objects as $field) {
+        if (!is_array($field)) {
+            continue;
+        }
+
+        $name = isset($field['name']) ? sanitize_key($field['name']) : '';
+        $key = isset($field['key']) ? sanitize_key($field['key']) : '';
+
+        if ($name === '') {
+            continue;
+        }
+
+        $fields[] = [
+            'name'  => $name,
+            'key'   => $key,
+            'label' => isset($field['label']) ? dca_tb_clean_text($field['label']) : $name,
+            'type'  => isset($field['type']) ? sanitize_key($field['type']) : '',
+            'value' => $field['value'] ?? '',
+        ];
+    }
+
+    return $fields;
+}
+
+function dca_tb_build_acf_fields_block($post_id) {
+    $fields = dca_tb_get_detected_acf_fields($post_id);
+    $out = ['ACF VELDEN'];
+
+    if (empty($fields)) {
+        $out[] = '';
+        $out[] = 'Geen ACF-velden gedetecteerd voor deze pagina.';
+        return implode("\n", $out);
+    }
+
+    foreach ($fields as $field) {
+        $out[] = '';
+        $out[] = '--- ACF VELD ---';
+        $out[] = 'Naam: ' . $field['name'];
+        $out[] = 'Label: ' . $field['label'];
+        $out[] = 'Key: ' . $field['key'];
+        $out[] = 'Type: ' . $field['type'];
+        $out[] = 'Waarde:';
+        $out[] = dca_tb_acf_value_to_text($field['value'], $field['type']);
+        $out[] = '--- EINDE ACF VELD ---';
+    }
+
+    return trim(implode("\n", $out));
+}
+
+function dca_tb_parse_acf_fields_block($textblock) {
+    $section = dca_tb_section($textblock, 'ACF VELDEN', dca_tb_acf_export_end_markers());
+
+    if ($section === null) {
+        return null;
+    }
+
+    preg_match_all('/^--- ACF VELD ---\s*\n(.*?)^--- EINDE ACF VELD ---\s*$/ims', $section, $matches);
+    $items = [];
+
+    foreach ($matches[1] as $raw) {
+        $name = dca_tb_label($raw, 'Naam:', ['Label:', 'Key:', 'Type:', 'Waarde:']);
+        $label = dca_tb_label($raw, 'Label:', ['Key:', 'Type:', 'Waarde:']);
+        $key = dca_tb_label($raw, 'Key:', ['Type:', 'Waarde:']);
+        $type = dca_tb_label($raw, 'Type:', ['Waarde:']);
+        $value = dca_tb_label($raw, 'Waarde:');
+
+        $name = sanitize_key((string) $name);
+        $key = sanitize_key((string) $key);
+
+        if ($name === '') {
+            continue;
+        }
+
+        $items[] = [
+            'name'  => $name,
+            'label' => dca_tb_clean_text((string) $label),
+            'key'   => $key,
+            'type'  => sanitize_key((string) $type),
+            'value' => $value === null ? '' : $value,
+        ];
+    }
+
+    return $items;
+}
+
+function dca_tb_clean_acf_import_value($value, $type) {
+    $value = trim((string) $value);
+    $type = sanitize_key($type);
+
+    if (in_array($type, ['image', 'file'], true)) {
+        $attachment_id = absint(dca_tb_label($value, 'Attachment ID:', ['URL:', 'Alt text:', 'Title:', 'Caption:', 'Description:']));
+
+        if (!$attachment_id && is_numeric($value)) {
+            $attachment_id = absint($value);
+        }
+
+        if (!$attachment_id) {
+            $url = dca_tb_label($value, 'URL:', ['Alt text:', 'Title:', 'Caption:', 'Description:']);
+            if ($url && function_exists('attachment_url_to_postid')) {
+                $attachment_id = absint(attachment_url_to_postid(esc_url_raw($url)));
+            }
+        }
+
+        return $attachment_id;
+    }
+
+    if ($type === 'gallery') {
+        preg_match_all('/\d+/', $value, $matches);
+        return array_values(array_unique(array_map('absint', $matches[0] ?? [])));
+    }
+
+    if ($value !== '' && in_array(substr($value, 0, 1), ['{', '['], true)) {
+        $decoded = json_decode($value, true);
+        if (json_last_error() === JSON_ERROR_NONE) {
+            return $decoded;
+        }
+    }
+
+    if (in_array($type, ['wysiwyg', 'textarea', 'oembed'], true)) {
+        return dca_tb_clean_html($value);
+    }
+
+    if (in_array($type, ['number', 'range'], true)) {
+        return is_numeric($value) ? $value + 0 : '';
+    }
+
+    if (in_array($type, ['true_false'], true)) {
+        return in_array(strtolower($value), ['1', 'true', 'ja', 'yes', 'on'], true) ? 1 : 0;
+    }
+
+    return dca_tb_clean_text($value);
+}
+
+function dca_tb_validate_dynamic_acf_textblock($textblock) {
+    if (dca_tb_marker_count($textblock, 'ACF VELDEN') !== 1) {
+        return new WP_Error('dca_invalid_acf_fields', 'Opslaan gestopt: de kop "ACF VELDEN" ontbreekt of komt meerdere keren voor.');
+    }
+
+    foreach (['YOAST SEO', 'MEDIA', 'SAMENVATTING', 'UITGELICHTE AFBEELDING'] as $marker) {
+        if (dca_tb_marker_count($textblock, $marker) > 1) {
+            return new WP_Error('dca_duplicate_marker', 'Opslaan gestopt: de kop "' . $marker . '" komt meerdere keren voor.');
+        }
+    }
+
+    $featured_validation = dca_tb_validate_featured_image_block($textblock);
+    if (is_wp_error($featured_validation)) {
+        return $featured_validation;
+    }
+
+    $fields = dca_tb_parse_acf_fields_block($textblock);
+
+    if (!is_array($fields)) {
+        return new WP_Error('dca_invalid_acf_fields', 'Opslaan gestopt: ACF VELDEN kon niet exact gelezen worden.');
+    }
+
+    return true;
+}
+
+function dca_tb_save_dynamic_acf_fields($post_id, $textblock) {
+    $items = dca_tb_parse_acf_fields_block($textblock);
+
+    if (!is_array($items)) {
+        return new WP_Error('dca_invalid_acf_fields', 'Opslaan gestopt: ACF VELDEN kon niet exact gelezen worden.');
+    }
+
+    $detected = dca_tb_get_detected_acf_fields($post_id);
+    $by_name = [];
+    $by_key = [];
+
+    foreach ($detected as $field) {
+        $by_name[$field['name']] = $field;
+        if (!empty($field['key'])) {
+            $by_key[$field['key']] = $field;
+        }
+    }
+
+    foreach ($items as $item) {
+        $field = null;
+
+        if (!empty($item['key']) && isset($by_key[$item['key']])) {
+            $field = $by_key[$item['key']];
+        } elseif (isset($by_name[$item['name']])) {
+            $field = $by_name[$item['name']];
+        }
+
+        if (!$field) {
+            continue;
+        }
+
+        $value = dca_tb_clean_acf_import_value($item['value'], $field['type']);
+        $selector = !empty($field['key']) ? $field['key'] : $field['name'];
+
+        update_field($selector, $value, $post_id);
+    }
+
+    return true;
+}
+
 function dca_tb_build_textblock($post_id) {
     $post = get_post($post_id);
 
@@ -1268,79 +1583,31 @@ function dca_tb_build_textblock($post_id) {
     }
 
     /**
-     * Pagina's: originele ACF/USP/FAQ/Yoast/media-logica.
+     * Pagina's: exporteer alleen de ACF-velden die ACF voor dit object detecteert.
      */
-    if (!function_exists('get_field')) {
-        return 'ACF is niet actief of get_field() is niet beschikbaar.';
+    if (!function_exists('get_field_objects')) {
+        return 'ACF is niet actief of get_field_objects() is niet beschikbaar.';
     }
 
     $out = [
-        'HOOFDTEKST',
+        dca_tb_build_acf_fields_block($post_id),
         '',
-        dca_tb_text(get_field('hoofdtekst', $post_id)),
+        'YOAST SEO',
         '',
+        'SEO title:',
+        '',
+        dca_tb_text(get_post_meta($post_id, '_yoast_wpseo_title', true)),
+        '',
+        'Meta description:',
+        '',
+        dca_tb_text(get_post_meta($post_id, '_yoast_wpseo_metadesc', true)),
+        '',
+        dca_tb_build_summary_block($post_id),
+        '',
+        dca_tb_build_featured_image_block($post_id),
+        '',
+        dca_tb_build_media_block($post_id),
     ];
-
-    for ($i = 1; $i <= 3; $i++) {
-        $out[] = 'CONTENTBLOK ' . $i;
-
-        $mini = dca_tb_text(get_field('minititel_' . $i, $post_id));
-
-        if ($mini !== '') {
-            array_push($out, '', 'Minititel:', '', $mini, '');
-        }
-
-        array_push(
-            $out,
-            '',
-            'Titel:',
-            '',
-            dca_tb_text(get_field('titel_' . $i, $post_id)),
-            '',
-            'Tekst:',
-            '',
-            dca_tb_text(get_field('tekst_' . $i, $post_id)),
-            ''
-        );
-    }
-
-    $out[] = 'USP';
-
-    foreach (dca_tb_usp_fields() as $index => $field) {
-        $number = $index + 1;
-
-        $out[] = '';
-        $out[] = 'USP ' . $number . ':';
-        $out[] = '';
-        $out[] = dca_tb_text(get_field($field, $post_id));
-    }
-
-    $out[] = '';
-    $out[] = 'FAQ';
-
-    for ($i = 1; $i <= 4; $i++) {
-        $out[] = '';
-        $out[] = dca_tb_text(get_field('faqtitel_' . $i, $post_id));
-        $out[] = '';
-        $out[] = dca_tb_text(get_field('faqtekst_' . $i, $post_id));
-    }
-
-    $out[] = '';
-    $out[] = 'YOAST SEO';
-    $out[] = '';
-    $out[] = 'SEO title:';
-    $out[] = '';
-    $out[] = dca_tb_text(get_post_meta($post_id, '_yoast_wpseo_title', true));
-    $out[] = '';
-    $out[] = 'Meta description:';
-    $out[] = '';
-    $out[] = dca_tb_text(get_post_meta($post_id, '_yoast_wpseo_metadesc', true));
-    $out[] = '';
-    $out[] = dca_tb_build_summary_block($post_id);
-    $out[] = '';
-    $out[] = dca_tb_build_featured_image_block($post_id);
-    $out[] = '';
-    $out[] = dca_tb_build_media_block($post_id);
 
     return trim(implode("\n", $out));
 }
@@ -1463,6 +1730,29 @@ function dca_tb_validate_post_textblock($textblock) {
     return true;
 }
 
+function dca_tb_update_acf_value($field_name, $value, $post_id) {
+    $field_name = sanitize_key($field_name);
+    $post_id = absint($post_id);
+
+    if ($field_name === '' || !$post_id) {
+        return false;
+    }
+
+    $updated = false;
+
+    if (function_exists('update_field')) {
+        $acf_result = update_field($field_name, $value, $post_id);
+        $updated = $updated || (bool) $acf_result;
+    }
+
+    // Fallback: update by meta key as well. This fixes cases where ACF cannot resolve
+    // a selector by field name because the field reference meta is missing or stale.
+    $meta_result = update_post_meta($post_id, $field_name, $value);
+    $updated = $updated || (bool) $meta_result;
+
+    return $updated;
+}
+
 function dca_tb_save_to_fields($post_id, $textblock, $source = 'save') {
     $post_id = absint($post_id);
     $post = get_post($post_id);
@@ -1533,13 +1823,18 @@ function dca_tb_save_to_fields($post_id, $textblock, $source = 'save') {
     }
 
     /**
-     * Pagina's: originele ACF/USP/FAQ/Yoast-logica.
+     * Pagina's: dynamische ACF-logica. Alleen velden verwerken die ACF op
+     * deze doelpagina detecteert en die ook in de export staan.
      */
-    if (!function_exists('update_field')) {
-        return new WP_Error('dca_acf_missing', 'ACF is niet actief of update_field() is niet beschikbaar.');
+    if (!function_exists('update_field') || !function_exists('get_field_objects')) {
+        return new WP_Error('dca_acf_missing', 'ACF is niet actief of update_field()/get_field_objects() is niet beschikbaar.');
     }
 
-    $validation = dca_tb_validate_textblock($textblock);
+    if (dca_tb_marker_count($textblock, 'ACF VELDEN') !== 1) {
+        return new WP_Error('dca_missing_acf_fields', 'Opslaan gestopt: pagina-import accepteert alleen exports met de kop "ACF VELDEN". Oude vaste ACF-layouts worden niet meer geïmporteerd.');
+    }
+
+    $validation = dca_tb_validate_dynamic_acf_textblock($textblock);
 
     if (is_wp_error($validation)) {
         return $validation;
@@ -1551,60 +1846,9 @@ function dca_tb_save_to_fields($post_id, $textblock, $source = 'save') {
 
     dca_tb_add_backup($post_id, $source);
 
-    $head = dca_tb_section($textblock, 'HOOFDTEKST', ['CONTENTBLOK 1']);
-    update_field('hoofdtekst', dca_tb_clean_html($head), $post_id);
-
-    for ($i = 1; $i <= 3; $i++) {
-        $block = dca_tb_section($textblock, 'CONTENTBLOK ' . $i, dca_tb_contentblock_end_markers($i));
-
-        $mini = dca_tb_label_marker_count($block, 'Minititel:') === 1
-            ? dca_tb_label($block, 'Minititel:', ['Titel:'])
-            : '';
-
-        $title = dca_tb_label($block, 'Titel:', ['Tekst:']);
-        $text  = dca_tb_label($block, 'Tekst:');
-
-        if ($title === null || $text === null) {
-            return new WP_Error('dca_parse_failed', 'Opslaan gestopt: CONTENTBLOK ' . $i . ' kon niet veilig verwerkt worden.');
-        }
-
-        update_field('minititel_' . $i, dca_tb_clean_text($mini), $post_id);
-        update_field('titel_' . $i, dca_tb_clean_text($title), $post_id);
-        update_field('tekst_' . $i, dca_tb_clean_html($text), $post_id);
-    }
-
-    if (dca_tb_marker_count($textblock, 'USP') === 1) {
-        $usp_block = dca_tb_section($textblock, 'USP', ['FAQ', 'YOAST SEO', 'SAMENVATTING', 'UITGELICHTE AFBEELDING', 'MEDIA']);
-
-        foreach (dca_tb_usp_fields() as $index => $field) {
-            $number = $index + 1;
-            $next = [];
-
-            if ($number < count(dca_tb_usp_fields())) {
-                $next[] = 'USP ' . ($number + 1) . ':';
-            }
-
-            $next[] = 'FAQ';
-            $next[] = 'YOAST SEO';
-            $next[] = 'SAMENVATTING';
-            $next[] = 'UITGELICHTE AFBEELDING';
-            $next[] = 'MEDIA';
-
-            $usp_value = dca_tb_label($usp_block, 'USP ' . $number . ':', $next);
-
-            if ($usp_value !== null) {
-                update_field($field, dca_tb_clean_text($usp_value), $post_id);
-            }
-        }
-    }
-
-    $faq_parts = dca_tb_blocks(dca_tb_section($textblock, 'FAQ', ['YOAST SEO', 'SAMENVATTING', 'UITGELICHTE AFBEELDING', 'MEDIA']));
-
-    for ($i = 1; $i <= 4; $i++) {
-        $q = ($i - 1) * 2;
-
-        update_field('faqtitel_' . $i, dca_tb_clean_text($faq_parts[$q] ?? ''), $post_id);
-        update_field('faqtekst_' . $i, dca_tb_clean_html($faq_parts[$q + 1] ?? ''), $post_id);
+    $acf_save = dca_tb_save_dynamic_acf_fields($post_id, $textblock);
+    if (is_wp_error($acf_save)) {
+        return $acf_save;
     }
 
     if (dca_tb_marker_count($textblock, 'YOAST SEO') === 1) {
@@ -1642,6 +1886,7 @@ function dca_tb_save_to_fields($post_id, $textblock, $source = 'save') {
     clean_post_cache($post_id);
 
     return true;
+
 }
 
 function dca_tb_build_bulk_export($post_ids) {
@@ -1651,7 +1896,11 @@ function dca_tb_build_bulk_export($post_ids) {
         $post_id = absint($post_id);
         $post = $post_id ? get_post($post_id) : null;
 
-        if (!$post || !dca_tb_is_supported_post_type($post->post_type) || !current_user_can('edit_post', $post_id) || !dca_tb_is_standard_template($post_id)) {
+        if (!$post || !dca_tb_is_supported_post_type($post->post_type) || !current_user_can('edit_post', $post_id)) {
+            continue;
+        }
+
+        if ($post->post_type === 'page' && dca_tb_template_skip_reason($post_id) !== '') {
             continue;
         }
 
@@ -1821,23 +2070,29 @@ function dca_tb_bulk_preview($txt) {
             $message = 'Overgeslagen: geen bijpassende pagina gevonden.';
         } elseif (!current_user_can('edit_post', $target)) {
             $message = 'Overgeslagen: geen rechten om deze pagina te bewerken.';
-        } elseif (!dca_tb_is_standard_template($target)) {
-            $message = 'Overgeslagen: pagina gebruikt geen standaard template.';
         } else {
             $target_post = get_post($target);
-            $validation = ($target_post && $target_post->post_type === 'post')
-                ? dca_tb_validate_post_textblock($item['textblock'])
-                : dca_tb_validate_textblock($item['textblock']);
+            $template_reason = ($target_post && $target_post->post_type === 'page') ? dca_tb_template_skip_reason($target) : '';
 
-            if (is_wp_error($validation)) {
-                $message = 'Overgeslagen: ' . $validation->get_error_message();
+            if ($template_reason !== '') {
+                $message = $template_reason;
             } else {
-                $status = $media['errors'] > 0 ? 'partial' : 'success';
-                $message = 'Klaar om op te slaan. Media: ' . absint($media['found']) . ' gevonden, ' . absint($media['renames']) . ' bestandsnamen te hernoemen';
-                if ($media['errors'] > 0) {
-                    $message .= ', ' . absint($media['errors']) . ' mediafout(en). Tekst wordt wel geïmporteerd.';
+                if ($target_post && $target_post->post_type === 'post') {
+                    $validation = dca_tb_validate_post_textblock($item['textblock']);
+                } else {
+                    $validation = dca_tb_validate_dynamic_acf_textblock($item['textblock']);
                 }
-                $message .= '.';
+
+                if (is_wp_error($validation)) {
+                    $message = 'Overgeslagen: ' . $validation->get_error_message();
+                } else {
+                    $status = $media['errors'] > 0 ? 'partial' : 'success';
+                    $message = 'Klaar om op te slaan. Media: ' . absint($media['found']) . ' gevonden, ' . absint($media['renames']) . ' bestandsnamen te hernoemen';
+                    if ($media['errors'] > 0) {
+                        $message .= ', ' . absint($media['errors']) . ' mediafout(en). Tekst wordt wel geïmporteerd.';
+                    }
+                    $message .= '.';
+                }
             }
         }
 
@@ -1909,7 +2164,11 @@ function dca_tb_bulk_save($txt) {
             continue;
         }
 
-        if (!dca_tb_is_standard_template($target)) {
+
+        $target_post = get_post($target);
+        $template_reason = ($target_post && $target_post->post_type === 'page') ? dca_tb_template_skip_reason($target) : '';
+
+        if ($template_reason !== '') {
             $skipped++;
             $results[] = [
                 'index'          => $i,
@@ -1918,15 +2177,14 @@ function dca_tb_bulk_save($txt) {
                 'target_post_id' => $target,
                 'target_title'   => get_the_title($target),
                 'status'         => 'skipped',
-                'message'        => 'Overgeslagen: pagina gebruikt geen standaard template.',
+                'message'        => $template_reason,
             ];
             continue;
         }
 
-        $target_post = get_post($target);
         $validation = ($target_post && $target_post->post_type === 'post')
             ? dca_tb_validate_post_textblock($item['textblock'])
-            : dca_tb_validate_textblock($item['textblock']);
+            : dca_tb_validate_dynamic_acf_textblock($item['textblock']);
 
         if (is_wp_error($validation)) {
             $skipped++;
@@ -2491,7 +2749,7 @@ add_action('admin_footer-edit.php', function () {
                     <button type="button" class="button dca-close-import">Sluiten</button>
                 </div>
                 <div class="dca-content">
-                    <p class="dca-warning">Gebruik een TXT-bestand dat via “Exporteer als .txt” is gemaakt. Alleen ondersteunde berichten en pagina’s worden verwerkt; custom templates worden overgeslagen. Media kan alt, title, caption, description en fysieke bestandsnaam wijzigen.</p>
+                    <p class="dca-warning">Gebruik een TXT-bestand dat via “Exporteer als .txt” is gemaakt. Berichten en pagina’s met de standaard WordPress-template worden verwerkt; custom templates en Elementor Canvas/Full Width worden overgeslagen. Media kan alt, title, caption, description en fysieke bestandsnaam wijzigen.</p>
                     <input type="file" id="dca-import-file" accept=".txt,text/plain">
                     <div class="dca-actions">
                         <button type="button" class="button" id="dca-import-preview">Controleer bestand</button>

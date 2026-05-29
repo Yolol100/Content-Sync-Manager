@@ -1,6 +1,6 @@
 # Content Sync Manager
 
-Admin-only mini-plugin voor TXT export/import van contentvelden, USP's, FAQ's, Yoast SEO velden, samenvattingen, uitgelichte afbeeldingen en media-metadata.
+Admin-only mini-plugin voor TXT export/import van gedetecteerde ACF-velden, Yoast SEO velden, samenvattingen, uitgelichte afbeeldingen en media-metadata.
 
 ## Installatie
 
@@ -26,7 +26,11 @@ Admin-only mini-plugin voor TXT export/import van contentvelden, USP's, FAQ's, Y
 
 ## Versie
 
-1.0.9
+1.2.3
+
+## ACF-velden
+
+Pagina-export gebruikt dynamische ACF-detectie. De plugin exporteert alleen velden die ACF op de betreffende pagina detecteert en importeert alleen velden die op de doelpagina ook door ACF bestaan. Oude vaste ACF-layouts zoals hoofdtekst/titel_1/usp_1 worden niet meer teruggeschreven.
 
 
 ## Let op bij hernoemen

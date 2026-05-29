@@ -4,17 +4,17 @@ Tags: admin, acf, yoast, import
 Requires at least: 6.2
 Tested up to: 7.0
 Requires PHP: 7.4
-Stable tag: 1.0.9
+Stable tag: 1.2.3
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
-Admin-only TXT import/export voor contentvelden, USP's, Yoast SEO en media-metadata.
+Admin-only TXT import/export voor gedetecteerde ACF-velden, Yoast SEO en media-metadata.
 
 == Description ==
 
 Deze plugin draait alleen in de WordPress-admin en voert geen externe tracking, externe asset-loading of externe API-calls uit.
 
-Deze private plugin voegt een compacte admin bulkeditor toe voor pagina's en berichten. De plugin is bedoeld voor gecontroleerde staging-imports en werkt met bestaande ACF-velden, Yoast meta en lokale WordPress-afbeeldingen.
+Deze private plugin voegt een compacte admin bulkeditor toe voor pagina's en berichten. De plugin is bedoeld voor gecontroleerde staging-imports en detecteert bestaande ACF-velden per pagina en werkt met Yoast meta en lokale WordPress-afbeeldingen.
 
 == Installation ==
 
@@ -25,10 +25,10 @@ Deze private plugin voegt een compacte admin bulkeditor toe voor pagina's en ber
 
 == Changelog ==
 
-= 1.0.9 =
-* Plugin hernoemd naar Content Sync Manager.
-* Pluginmap, hoofdpluginbestand, text-domain en documentatie consistent gemaakt met de nieuwe slug content-sync-manager.
-* Interne functionaliteit bewust niet breed hernoemd om regressies in hooks en bestaande codepaden te voorkomen.
+= 1.2.3 =
+* Verbetering: ACF image/file-velden worden compact en leesbaar geëxporteerd met Attachment ID, URL, alt, titel, caption en description in plaats van volledige ACF image-arrays.
+* Verbetering: ACF gallery-velden worden importvriendelijk geëxporteerd als attachment-ID-lijst.
+* Fix: import van ACF image/file-velden accepteert de nieuwe nette layout en schrijft het attachment-ID terug naar ACF.
 
 = 1.0.8 =
 * Extra 10/10-releasecheck uitgevoerd op foutpaden, admin-toegang en WordPress.org/Plugin Check-aandachtspunten.
