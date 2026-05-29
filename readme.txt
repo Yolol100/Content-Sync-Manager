@@ -4,7 +4,7 @@ Tags: admin, acf, yoast, import
 Requires at least: 6.2
 Tested up to: 7.0
 Requires PHP: 7.4
-Stable tag: 1.2.3
+Stable tag: 1.2.4
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -24,6 +24,9 @@ Deze private plugin voegt een compacte admin bulkeditor toe voor pagina's en ber
 4. Test eerst export, preview en daarna import.
 
 == Changelog ==
+
+= 1.2.4 =
+* Extra lijstfilter toegevoegd voor standaard/ACF-pagina's zonder Elementor-builderdata.
 
 = 1.2.3 =
 * Verbetering: ACF image/file-velden worden compact en leesbaar geëxporteerd met Attachment ID, URL, alt, titel, caption en description in plaats van volledige ACF image-arrays.

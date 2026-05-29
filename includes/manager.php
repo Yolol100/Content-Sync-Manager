@@ -197,6 +197,96 @@ function dca_tb_get_list_status_filter() {
     return in_array($status, ['not_done', 'done_today'], true) ? $status : '';
 }
 
+function dca_tb_get_list_template_filter() {
+    $template = isset($_GET['dca_tb_template']) ? sanitize_key(wp_unslash($_GET['dca_tb_template'])) : '';
+
+    return in_array($template, ['standard'], true) ? $template : '';
+}
+
+function dca_tb_standard_template_meta_query() {
+    return [
+        'relation' => 'AND',
+        [
+            'relation' => 'OR',
+            [
+                'key'     => '_wp_page_template',
+                'compare' => 'NOT EXISTS',
+            ],
+            [
+                'key'     => '_wp_page_template',
+                'value'   => '',
+                'compare' => '=',
+            ],
+            [
+                'key'     => '_wp_page_template',
+                'value'   => 'default',
+                'compare' => '=',
+            ],
+        ],
+        [
+            'relation' => 'OR',
+            [
+                'key'     => '_elementor_edit_mode',
+                'compare' => 'NOT EXISTS',
+            ],
+            [
+                'key'     => '_elementor_edit_mode',
+                'value'   => '',
+                'compare' => '=',
+            ],
+            [
+                'key'     => '_elementor_edit_mode',
+                'value'   => 'builder',
+                'compare' => '!=',
+            ],
+        ],
+        [
+            'relation' => 'OR',
+            [
+                'key'     => '_elementor_data',
+                'compare' => 'NOT EXISTS',
+            ],
+            [
+                'key'     => '_elementor_data',
+                'value'   => '',
+                'compare' => '=',
+            ],
+            [
+                'key'     => '_elementor_data',
+                'value'   => '[]',
+                'compare' => '=',
+            ],
+            [
+                'key'     => '_elementor_data',
+                'value'   => 'a:0:{}',
+                'compare' => '=',
+            ],
+        ],
+        [
+            'relation' => 'OR',
+            [
+                'key'     => '_elementor_page_template',
+                'compare' => 'NOT EXISTS',
+            ],
+            [
+                'key'     => '_elementor_page_template',
+                'value'   => '',
+                'compare' => '=',
+            ],
+            [
+                'key'     => '_elementor_page_template',
+                'value'   => 'default',
+                'compare' => '=',
+            ],
+            [
+                'key'     => '_elementor_page_template',
+                'value'   => ['elementor_canvas', 'elementor_header_footer'],
+                'compare' => 'NOT IN',
+            ],
+        ],
+    ];
+}
+
 add_action('pre_get_posts', function ($q) {
     if (!is_admin() || !$q->is_main_query()) return;
 
@@ -204,8 +294,9 @@ add_action('pre_get_posts', function ($q) {
 
     $post_type = dca_tb_get_admin_post_type();
     $status = dca_tb_get_list_status_filter();
+    $template_filter = dca_tb_get_list_template_filter();
 
-    if ($pagenow !== 'edit.php' || !dca_tb_is_supported_post_type($post_type) || $status === '') {
+    if ($pagenow !== 'edit.php' || !dca_tb_is_supported_post_type($post_type) || ($status === '' && $template_filter === '')) {
         return;
     }
 
@@ -240,6 +331,11 @@ add_action('pre_get_posts', function ($q) {
         ];
     }
 
+    if ($template_filter === 'standard' && $post_type === 'page') {
+        // Toon alleen normale WordPress-pagina's: geen custom page template en geen Elementor-builderdata.
+        $meta_query[] = dca_tb_standard_template_meta_query();
+    }
+
     $q->set('meta_query', $meta_query);
 });
 
@@ -249,12 +345,20 @@ add_action('restrict_manage_posts', function ($post_type) {
     }
 
     $current = dca_tb_get_list_status_filter();
+    $template_current = dca_tb_get_list_template_filter();
 
     echo '<select name="dca_tb_status" id="dca-tb-status-filter">';
     echo '<option value="">' . esc_html__('Contentblok: alles tonen', 'content-sync-manager') . '</option>';
     echo '<option value="not_done" ' . selected($current, 'not_done', false) . '>' . esc_html__('Contentblok: nog te doen vandaag', 'content-sync-manager') . '</option>';
     echo '<option value="done_today" ' . selected($current, 'done_today', false) . '>' . esc_html__('Contentblok: vandaag bijgewerkt', 'content-sync-manager') . '</option>';
     echo '</select>';
+
+    if ($post_type === 'page') {
+        echo '<select name="dca_tb_template" id="dca-tb-template-filter">';
+        echo '<option value="">' . esc_html__('Template: alles tonen', 'content-sync-manager') . '</option>';
+        echo '<option value="standard" ' . selected($template_current, 'standard', false) . '>' . esc_html__('Template: alleen standaard / ACF', 'content-sync-manager') . '</option>';
+        echo '</select>';
+    }
 });
 
 function dca_tb_add_textblock_column($columns) {
@@ -400,6 +504,29 @@ function dca_tb_array_contains_value($value, $needles) {
     return false;
 }
 
+function dca_tb_has_elementor_builder_content($post_id) {
+    $post_id = absint($post_id);
+
+    if (!$post_id) {
+        return false;
+    }
+
+    $edit_mode = get_post_meta($post_id, '_elementor_edit_mode', true);
+
+    if (is_string($edit_mode) && strtolower(trim($edit_mode)) === 'builder') {
+        return true;
+    }
+
+    $elementor_data = get_post_meta($post_id, '_elementor_data', true);
+
+    if (is_string($elementor_data)) {
+        $elementor_data = trim($elementor_data);
+        return $elementor_data !== '' && $elementor_data !== '[]' && $elementor_data !== 'a:0:{}';
+    }
+
+    return is_array($elementor_data) && !empty($elementor_data);
+}
+
 function dca_tb_has_elementor_nonstandard_layout($post_id) {
     $post_id = absint($post_id);
 
@@ -456,6 +583,10 @@ function dca_tb_template_skip_reason($post_id) {
 
     if ($post_type === 'page' && get_page_template_slug($post_id) !== '') {
         return 'Overgeslagen: pagina gebruikt geen standaard WordPress-template.';
+    }
+
+    if (dca_tb_has_elementor_builder_content($post_id)) {
+        return 'Overgeslagen: pagina is met Elementor opgebouwd en wordt niet als ACF-standaardtemplate verwerkt.';
     }
 
     if (dca_tb_has_elementor_nonstandard_layout($post_id)) {
@@ -2647,9 +2778,15 @@ function dca_tb_should_load_admin_ui($hook_suffix = '') {
 function dca_tb_get_admin_asset_settings() {
     $screen = get_current_screen();
     $status_filter = dca_tb_get_list_status_filter();
+    $template_filter = dca_tb_get_list_template_filter();
     $base_url = ($screen && $screen->post_type === 'post')
         ? admin_url('edit.php')
         : admin_url('edit.php?post_type=' . ($screen ? $screen->post_type : 'page'));
+
+    if ($template_filter !== '' && $screen && $screen->post_type === 'page') {
+        $base_url = add_query_arg('dca_tb_template', $template_filter, $base_url);
+    }
+
     $not_done_url = add_query_arg('dca_tb_status', 'not_done', $base_url);
     $filter_url = $status_filter === 'not_done' ? $base_url : $not_done_url;
 
@@ -2749,7 +2886,7 @@ add_action('admin_footer-edit.php', function () {
                     <button type="button" class="button dca-close-import">Sluiten</button>
                 </div>
                 <div class="dca-content">
-                    <p class="dca-warning">Gebruik een TXT-bestand dat via “Exporteer als .txt” is gemaakt. Berichten en pagina’s met de standaard WordPress-template worden verwerkt; custom templates en Elementor Canvas/Full Width worden overgeslagen. Media kan alt, title, caption, description en fysieke bestandsnaam wijzigen.</p>
+                    <p class="dca-warning">Gebruik een TXT-bestand dat via “Exporteer als .txt” is gemaakt. Berichten en pagina’s met de standaard WordPress-template worden verwerkt; custom templates en pagina’s die met Elementor zijn opgebouwd worden overgeslagen. Media kan alt, title, caption, description en fysieke bestandsnaam wijzigen.</p>
                     <input type="file" id="dca-import-file" accept=".txt,text/plain">
                     <div class="dca-actions">
                         <button type="button" class="button" id="dca-import-preview">Controleer bestand</button>

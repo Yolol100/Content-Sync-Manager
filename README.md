@@ -26,7 +26,7 @@ Admin-only mini-plugin voor TXT export/import van gedetecteerde ACF-velden, Yoas
 
 ## Versie
 
-1.2.3
+1.2.4
 
 ## ACF-velden
 
