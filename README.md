@@ -26,7 +26,7 @@ Admin-only mini-plugin voor TXT export/import van berichten, pagina’s en produ
 
 ## Versie
 
-1.2.6
+1.2.12
 
 ## ACF-velden
 

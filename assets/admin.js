@@ -4,18 +4,59 @@ document.addEventListener('DOMContentLoaded',function(){
             const filterUrl = dcaSettings.filterUrl;
             const notDoneUrl = dcaSettings.notDoneUrl;
             const filterLabel = dcaSettings.filterLabel;
-    
-            if(!document.querySelector('.dca-toolbar')){
-                const bar=document.createElement('div');
-                bar.className='dca-toolbar';
-                bar.innerHTML='<span class="dca-toolbar-title">SEO:</span><button type="button" class="button" id="dca-copy-selected">Kopieer</button><button type="button" class="button" id="dca-open-empty-bulk">Bulkeditor</button><button type="button" class="button" id="dca-export-selected">Export .txt</button><button type="button" class="button" id="dca-deselect-selected">Deselecteer alles</button><button type="button" class="button button-primary" id="dca-open-import">Import .txt</button><a class="button" href="'+filterUrl+'">'+filterLabel+'</a>';
-                document.body.appendChild(bar);
-            }
+            const ajaxUrl = window.ajaxurl || dcaSettings.ajaxUrl || '';
     
             const $=s=>document.querySelector(s), $$=s=>Array.from(document.querySelectorAll(s));
+
+            function ensureToolbar(){
+                if(!nonce)return;
+                const existing=document.querySelector('.dca-toolbar');
+                if(existing && document.querySelector('#dca-copy-selected') && document.querySelector('#dca-open-empty-bulk') && document.querySelector('#dca-export-selected') && document.querySelector('#dca-deselect-selected') && document.querySelector('#dca-open-import')){
+                    return;
+                }
+                const bar=document.createElement('div');
+                bar.className='dca-toolbar';
+                const title=document.createElement('span');
+                title.className='dca-toolbar-title';
+                title.textContent='SEO:';
+                bar.appendChild(title);
+                [
+                    ['dca-copy-selected','Kopieer','button'],
+                    ['dca-open-empty-bulk','Bulkeditor','button'],
+                    ['dca-export-selected','Export .txt','button'],
+                    ['dca-deselect-selected','Deselecteer alles','button'],
+                    ['dca-open-import','Import .txt','button button-primary']
+                ].forEach(item=>{
+                    const btn=document.createElement('button');
+                    btn.type='button';
+                    btn.id=item[0];
+                    btn.className=item[2];
+                    btn.textContent=item[1];
+                    bar.appendChild(btn);
+                });
+                const link=document.createElement('a');
+                link.className='button';
+                link.href=filterUrl||'#';
+                link.textContent=filterLabel||'Filter';
+                bar.appendChild(link);
+                document.body.appendChild(bar);
+            }
+
+            ensureToolbar();
+    
             const toast=$('#dca-toast'), singleModal=$('#dca-single-modal'), singleOut=$('#dca-single-output'), singleTitle=$('#dca-single-title'), singleStatus=$('#dca-single-status'), singleView=$('#dca-single-view');
             const bulkModal=$('#dca-bulk-modal'), bulkOut=$('#dca-bulk-output'), bulkStatus=$('#dca-bulk-status'), bulkPreview=$('#dca-bulk-preview'), bulkSave=$('#dca-bulk-save');
             const importModal=$('#dca-import-modal'), importFile=$('#dca-import-file'), importStatus=$('#dca-import-status'), importPreviewBox=$('#dca-import-preview-box'), importRun=$('#dca-import-run');
+
+            const singleSave=$('#dca-single-save'), singleCopy=$('#dca-single-copy'), singleDownload=$('#dca-single-download'), singleClose=$('.dca-close-single');
+            const bulkCheck=$('#dca-bulk-check'), bulkCopy=$('#dca-bulk-copy'), bulkDownload=$('#dca-bulk-download'), bulkClose=$('.dca-close-bulk');
+            const importPreview=$('#dca-import-preview'), importClose=$('.dca-close-import');
+            const toolbarCopy=$('#dca-copy-selected'), toolbarBulk=$('#dca-open-empty-bulk'), toolbarExport=$('#dca-export-selected'), toolbarDeselect=$('#dca-deselect-selected'), toolbarImport=$('#dca-open-import');
+            const requiredEls=[toast,singleModal,singleOut,singleTitle,singleStatus,singleView,singleSave,singleCopy,singleDownload,singleClose,bulkModal,bulkOut,bulkStatus,bulkPreview,bulkSave,bulkCheck,bulkCopy,bulkDownload,bulkClose,importModal,importFile,importStatus,importPreviewBox,importRun,importPreview,importClose,toolbarCopy,toolbarBulk,toolbarExport,toolbarDeselect,toolbarImport];
+            if(!nonce||!ajaxUrl||requiredEls.some(el=>!el)){
+                console.warn('Content Sync Manager: admin UI niet volledig geladen. Herlaad de adminpagina.');
+                return;
+            }
     
             let currentPostId=null, singleFilename='content-sync.txt', bulkFilename='content-sync.txt', importTxt='', importOk=false, cache={}, singleInitial='', bulkInitial='', bulkChecked=false, toastTimer=null;
     
@@ -31,7 +72,7 @@ document.addEventListener('DOMContentLoaded',function(){
                 fd.append('nonce',nonce);
                 Object.keys(data||{}).forEach(k=>Array.isArray(data[k])?data[k].forEach(v=>fd.append(k+'[]',v)):fd.append(k,data[k]));
     
-                return fetch(ajaxurl,{
+                return fetch(ajaxUrl,{
                     method:'POST',
                     credentials:'same-origin',
                     headers:{'Accept':'application/json'},
@@ -71,7 +112,31 @@ document.addEventListener('DOMContentLoaded',function(){
                     data:{message:'AJAX-verzoek mislukt: '+(error&&error.message?error.message:String(error))}
                 }));
             }
-            function copy(text,el){navigator.clipboard.writeText(text).then(()=>status(el,'Gekopieerd.','is-success')).catch(()=>{document.execCommand('copy');status(el,'Gekopieerd.','is-success')})}
+            function fallbackCopy(text){
+                const ta=document.createElement('textarea');
+                ta.value=text;
+                ta.setAttribute('readonly','readonly');
+                ta.style.position='fixed';
+                ta.style.left='-9999px';
+                document.body.appendChild(ta);
+                ta.focus();
+                ta.select();
+                let ok=false;
+                try{ok=document.execCommand('copy')}catch(e){ok=false}
+                ta.remove();
+                return ok;
+            }
+            function copy(text,el){
+                if(navigator.clipboard&&navigator.clipboard.writeText){
+                    navigator.clipboard.writeText(text).then(()=>status(el,'Gekopieerd.','is-success')).catch(()=>{
+                        const ok=fallbackCopy(text);
+                        status(el,ok?'Gekopieerd.':'Kopiëren mislukt. Selecteer en kopieer handmatig.',ok?'is-success':'is-error');
+                    });
+                    return;
+                }
+                const ok=fallbackCopy(text);
+                status(el,ok?'Gekopieerd.':'Kopiëren mislukt. Selecteer en kopieer handmatig.',ok?'is-success':'is-error');
+            }
             function download(text,name){const b=new Blob([text],{type:'text/plain;charset=utf-8'}),u=URL.createObjectURL(b),a=document.createElement('a');a.href=u;a.download=name||'content-sync.txt';document.body.appendChild(a);a.click();a.remove();URL.revokeObjectURL(u)}
             function selectedIds(){return $$('tbody th.check-column input[type="checkbox"][name="post[]"]:checked').map(c=>c.value)}
             function esc(v){return String(v).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#039;')}
@@ -85,7 +150,7 @@ document.addEventListener('DOMContentLoaded',function(){
             }
     
             document.addEventListener('change',e=>{if(e.target.matches('input[type="checkbox"][name="post[]"], #cb-select-all-1, #cb-select-all-2'))setTimeout(updateSelectionToast,40)});
-            document.addEventListener('click',e=>{if(e.target&&e.target.id==='dca-deselect-selected'){e.preventDefault();deselectAll()}});
+            toolbarDeselect.addEventListener('click',e=>{e.preventDefault();deselectAll()});
     
             function preload(){
                 const ids=$$('.dca-open-acf-textblock').map(b=>b.dataset.postId).filter(Boolean);
@@ -118,11 +183,17 @@ document.addEventListener('DOMContentLoaded',function(){
             }
     
             function renderPreview(box,items){
+                if(!Array.isArray(items)){
+                    box.innerHTML='<p class="dca-error">Geen geldige preview ontvangen.</p>';
+                    box.style.display='block';
+                    return;
+                }
                 let html='<table><thead><tr><th>Bron</th><th>Gekoppelde pagina</th><th>Status</th></tr></thead><tbody>';
                 items.forEach(i=>{
+                    i=i||{};
                     const cls=i.status==='success'?'dca-ok':(i.status==='partial'?'dca-partial':'dca-error');
-                    const target=i.target_title?i.target_title+' (#'+i.target_post_id+')':'Niet gevonden';
-                    html+='<tr><td><strong>'+esc(i.source_title)+'</strong><br>ID: '+esc(i.source_id)+'</td><td>'+esc(target)+'</td><td class="'+cls+'">'+esc(i.message)+'</td></tr>';
+                    const target=i.target_title?i.target_title+' (#'+(i.target_post_id||0)+')':'Niet gevonden';
+                    html+='<tr><td><strong>'+esc(i.source_title||'Onbekend item')+'</strong><br>ID: '+esc(i.source_id||'')+'</td><td>'+esc(target)+'</td><td class="'+cls+'">'+esc(i.message||'Geen melding ontvangen.')+'</td></tr>';
                 });
                 box.innerHTML=html+'</tbody></table>';
                 box.style.display='block';
@@ -158,7 +229,7 @@ document.addEventListener('DOMContentLoaded',function(){
                 }).catch(()=>singleOut.value='Er ging iets mis.');
             }));
     
-            $('#dca-single-save').addEventListener('click',function(){
+            singleSave.addEventListener('click',function(){
                 if(!currentPostId){status(singleStatus,'Geen pagina geselecteerd.','is-error');return}
                 if(!confirm('Weet je zeker dat je dit contentblok wilt opslaan? Er wordt automatisch eerst een back-up gemaakt.'))return;
                 this.disabled=true;status(singleStatus,'Back-up maken en opslaan...','');
@@ -173,9 +244,9 @@ document.addEventListener('DOMContentLoaded',function(){
                 }).catch(()=>{this.disabled=false;status(singleStatus,'Opslaan mislukt.','is-error')});
             });
     
-            $('#dca-single-copy').addEventListener('click',()=>{singleOut.focus();singleOut.select();copy(singleOut.value,singleStatus)});
-            $('#dca-single-download').addEventListener('click',()=>{download(singleOut.value,singleFilename);status(singleStatus,'TXT-bestand gedownload.','is-success')});
-            $('.dca-close-single').addEventListener('click',()=>closeSafe(singleModal,'single'));
+            singleCopy.addEventListener('click',()=>{singleOut.focus();singleOut.select();copy(singleOut.value,singleStatus)});
+            singleDownload.addEventListener('click',()=>{download(singleOut.value,singleFilename);status(singleStatus,'TXT-bestand gedownload.','is-success')});
+            singleClose.addEventListener('click',()=>closeSafe(singleModal,'single'));
     
             function fetchBulk(){
                 const ids=selectedIds();
@@ -196,7 +267,7 @@ document.addEventListener('DOMContentLoaded',function(){
             function resetBulkCheck(){bulkChecked=false;bulkSave.disabled=true;bulkPreview.style.display='none';bulkPreview.innerHTML=''}
             bulkOut.addEventListener('input',function(){resetBulkCheck();saveBulkDraft()});
     
-            $('#dca-open-empty-bulk').addEventListener('click',function(){
+            toolbarBulk.addEventListener('click',function(){
                 const draft = getBulkDraft();
     
                 bulkOut.value='';
@@ -215,7 +286,7 @@ document.addEventListener('DOMContentLoaded',function(){
                 showToast('Bulkeditor geopend. Plak je tekst en controleer vóór opslaan.');
             });
     
-            $('#dca-copy-selected').addEventListener('click',function(){
+            toolbarCopy.addEventListener('click',function(){
                 bulkOut.value='Contentblokken worden opgehaald...';
                 bulkInitial=bulkOut.value;
                 resetBulkCheck();
@@ -234,25 +305,28 @@ document.addEventListener('DOMContentLoaded',function(){
                 }).catch(()=>close(bulkModal));
             });
     
-            $('#dca-export-selected').addEventListener('click',()=>fetchBulk().then(d=>{
+            toolbarExport.addEventListener('click',()=>fetchBulk().then(d=>{
                 if(!d||!d.success){alert(d&&d.data&&d.data.message?d.data.message:'Exporteren mislukt.');return}
                 download(d.data.text,d.data.filename);
             }).catch(()=>{}));
     
-            $('#dca-bulk-check').addEventListener('click',function(){
+            bulkCheck.addEventListener('click',function(){
                 if(!bulkOut.value.trim()){status(bulkStatus,'Er staat geen tekst om te controleren.','is-error');return}
                 status(bulkStatus,'Controleren...','');
                 bulkSave.disabled=true;
                 bulkChecked=false;
     
                 ajax('dca_txt_import_preview',{txt_content:bulkOut.value}).then(d=>{
-                    if(!d||!d.success){status(bulkStatus,d&&d.data&&d.data.message?d.data.message:'Controle mislukt.','is-error');return}
-                    renderPreview(bulkPreview,d.data.items);
-                    const errors=d.data.items.some(i=>i.status!=='success');
+                    if(!d||!d.success){bulkPreview.style.display='none';bulkPreview.innerHTML='';status(bulkStatus,d&&d.data&&d.data.message?d.data.message:'Controle mislukt.','is-error');return}
+                    const items=Array.isArray(d.data&&d.data.items)?d.data.items:[];
+                    renderPreview(bulkPreview,items);
+                    if(!items.length){status(bulkStatus,'Controle gaf geen items terug. Opslaan is geblokkeerd.','is-error');return}
+                    const errors=items.some(i=>i.status!=='success');
                     if(errors){
-                        bulkChecked=true;
-                        bulkSave.disabled=false;
-                        status(bulkStatus,'Er zijn fouten gevonden. Geldige items kunnen alsnog worden opgeslagen; foutieve items worden overgeslagen.','is-error');
+                        const validItems=items.some(i=>i.status==='success'||i.status==='partial');
+                        bulkChecked=validItems;
+                        bulkSave.disabled=!validItems;
+                        status(bulkStatus, validItems ? 'Er zijn fouten gevonden. Geldige items kunnen alsnog worden opgeslagen; foutieve items worden overgeslagen.' : 'Er zijn alleen fouten gevonden. Er is niets om op te slaan.','is-error');
                         return;
                     }
                     bulkChecked=true;
@@ -279,12 +353,12 @@ document.addEventListener('DOMContentLoaded',function(){
                 }).catch(()=>{this.disabled=false;status(bulkStatus,'Bulk opslaan mislukt.','is-error')});
             });
     
-            $('#dca-bulk-copy').addEventListener('click',()=>{bulkOut.focus();bulkOut.select();copy(bulkOut.value,bulkStatus)});
-            $('#dca-bulk-download').addEventListener('click',()=>{download(bulkOut.value,bulkFilename);status(bulkStatus,'TXT-bestand gedownload.','is-success')});
-            $('.dca-close-bulk').addEventListener('click',()=>closeSafe(bulkModal,'bulk'));
+            bulkCopy.addEventListener('click',()=>{bulkOut.focus();bulkOut.select();copy(bulkOut.value,bulkStatus)});
+            bulkDownload.addEventListener('click',()=>{download(bulkOut.value,bulkFilename);status(bulkStatus,'TXT-bestand gedownload.','is-success')});
+            bulkClose.addEventListener('click',()=>closeSafe(bulkModal,'bulk'));
     
-            $('#dca-open-import').addEventListener('click',()=>{importTxt='';importOk=false;importFile.value='';importPreviewBox.innerHTML='';importPreviewBox.style.display='none';importRun.disabled=true;status(importStatus,'','');open(importModal)});
-            $('.dca-close-import').addEventListener('click',()=>close(importModal));
+            toolbarImport.addEventListener('click',()=>{importTxt='';importOk=false;importFile.value='';importPreviewBox.innerHTML='';importPreviewBox.style.display='none';importRun.disabled=true;status(importStatus,'','');open(importModal)});
+            importClose.addEventListener('click',()=>close(importModal));
     
             function readFile(){
                 return new Promise((res,rej)=>{
@@ -298,7 +372,7 @@ document.addEventListener('DOMContentLoaded',function(){
                 });
             }
     
-            $('#dca-import-preview').addEventListener('click',function(){
+            importPreview.addEventListener('click',function(){
                 importTxt='';
                 importOk=false;
                 importPreviewBox.innerHTML='';
@@ -311,13 +385,16 @@ document.addEventListener('DOMContentLoaded',function(){
                     status(importStatus,'Bestand controleren...','');
                     return ajax('dca_txt_import_preview',{txt_content:txt});
                 }).then(d=>{
-                    if(!d||!d.success){status(importStatus,d&&d.data&&d.data.message?d.data.message:'Controle mislukt.','is-error');return}
-                    renderPreview(importPreviewBox,d.data.items);
-                    const errors=d.data.items.some(i=>i.status!=='success');
+                    if(!d||!d.success){importPreviewBox.style.display='none';importPreviewBox.innerHTML='';status(importStatus,d&&d.data&&d.data.message?d.data.message:'Controle mislukt.','is-error');return}
+                    const items=Array.isArray(d.data&&d.data.items)?d.data.items:[];
+                    renderPreview(importPreviewBox,items);
+                    if(!items.length){status(importStatus,'Controle gaf geen items terug. Importeren is geblokkeerd.','is-error');return}
+                    const errors=items.some(i=>i.status!=='success');
                     if(errors){
-                        importOk=true;
-                        importRun.disabled=false;
-                        status(importStatus,'Er zijn fouten gevonden. Geldige items kunnen alsnog worden geïmporteerd; foutieve items worden overgeslagen.','is-error');
+                        const validItems=items.some(i=>i.status==='success'||i.status==='partial');
+                        importOk=validItems;
+                        importRun.disabled=!validItems;
+                        status(importStatus, validItems ? 'Er zijn fouten gevonden. Geldige items kunnen alsnog worden geïmporteerd; foutieve items worden overgeslagen.' : 'Er zijn alleen fouten gevonden. Er is niets om te importeren.','is-error');
                         return;
                     }
                     importOk=true;

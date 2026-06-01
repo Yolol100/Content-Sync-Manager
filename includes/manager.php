@@ -1419,7 +1419,7 @@ function dca_tb_acf_attachment_to_text($value) {
     }
 
     if (!$attachment_id) {
-        return 'Geen afbeelding/bestand geselecteerd.\nAttachment ID:\n0';
+        return "Geen afbeelding/bestand geselecteerd.\nAttachment ID:\n0";
     }
 
     $url = '';
@@ -1463,10 +1463,10 @@ function dca_tb_acf_gallery_to_text($value) {
     }
 
     if (!$ids) {
-        return 'Geen afbeeldingen geselecteerd.\nAttachment IDs:\n';
+        return "Geen afbeeldingen geselecteerd.\nAttachment IDs:\n";
     }
 
-    return 'Attachment IDs:\n' . implode(', ', array_map('absint', array_unique($ids)));
+    return "Attachment IDs:\n" . implode(', ', array_map('absint', array_unique($ids)));
 }
 
 function dca_tb_acf_value_to_text($value, $type = '') {
@@ -1499,7 +1499,11 @@ function dca_tb_get_detected_acf_fields($post_id) {
         return [];
     }
 
-    $objects = get_field_objects($post_id, false, true);
+    $objects = get_field_objects($post_id, false, false);
+
+    if (!is_array($objects)) {
+        $objects = get_field_objects($post_id, false, true);
+    }
 
     if (!is_array($objects)) {
         return [];
@@ -2097,7 +2101,7 @@ function dca_tb_title_matches_post($title, $post_id) {
     $title = trim((string) $title);
 
     if ($title === '') {
-        return true;
+        return false;
     }
 
     return dca_tb_normalize_title_for_match($title) === dca_tb_normalize_title_for_match(get_the_title($post_id));
@@ -2145,35 +2149,57 @@ function dca_tb_resolve_page($page_id, $url, $title, $expected_post_type = '') {
         return 0;
     }
 
-    if ($page_id && ($post = get_post($page_id)) && dca_tb_is_supported_post_type($post->post_type) && ($expected_post_type === '' || $post->post_type === $expected_post_type)) {
+    $allowed_post_types = $expected_post_type !== '' ? [$expected_post_type] : dca_tb_supported_post_types();
+
+    // Prefer the exported ID when it still points to the same item. If the ID now
+    // points to another item, do not fail immediately: on staging/live copies IDs
+    // can drift while the URL or exact title still identifies the correct target.
+    if ($page_id && ($post = get_post($page_id)) && in_array($post->post_type, $allowed_post_types, true)) {
         $url_matches = dca_tb_url_matches_post($url, $page_id);
         $title_matches = dca_tb_title_matches_post($title, $page_id);
 
-        if ($url_matches || $title_matches) {
+        if (($url === '' && $title === '') || $url_matches || $title_matches) {
             return $page_id;
         }
-
-        return 0;
     }
 
     if ($url !== '') {
         $url_id = url_to_postid($url);
 
-        if ($url_id && ($post = get_post($url_id)) && dca_tb_is_supported_post_type($post->post_type) && ($expected_post_type === '' || $post->post_type === $expected_post_type)) {
+        if ($url_id && ($post = get_post($url_id)) && in_array($post->post_type, $allowed_post_types, true)) {
             return absint($url_id);
+        }
+
+        $source_path = dca_tb_normalize_compare_url_path($url);
+
+        if ($source_path !== '') {
+            $q = new WP_Query([
+                'post_type'      => $allowed_post_types,
+                'post_status'    => 'any',
+                'posts_per_page' => 20,
+                'fields'         => 'ids',
+                'no_found_rows'  => true,
+            ]);
+
+            foreach ((array) $q->posts as $candidate_id) {
+                if (dca_tb_normalize_compare_url_path(get_permalink($candidate_id)) === $source_path) {
+                    return absint($candidate_id);
+                }
+            }
         }
     }
 
     if ($title !== '') {
         $q = new WP_Query([
-            'post_type'      => $expected_post_type !== '' ? [$expected_post_type] : dca_tb_supported_post_types(),
+            'post_type'      => $allowed_post_types,
             'post_status'    => 'any',
             'title'          => $title,
-            'posts_per_page' => 1,
+            'posts_per_page' => 2,
             'fields'         => 'ids',
+            'no_found_rows'  => true,
         ]);
 
-        if (!empty($q->posts[0])) {
+        if (count((array) $q->posts) === 1 && !empty($q->posts[0])) {
             return absint($q->posts[0]);
         }
     }
@@ -2216,7 +2242,12 @@ function dca_tb_parse_bulk_file($txt) {
     }
 
     $items = [];
-    $pattern = '/^={10,}\s*\n(PAGINA|BERICHT|PRODUCT):\s*(.*?)\nURL:\s*(.*?)\nID:\s*(\d+)\s*\n={10,}\s*\n(.*?)(?=^={10,}\s*\n(?:PAGINA|BERICHT|PRODUCT):|\z)/ims';
+
+    // Keep the export format compatible, but make the import/check more tolerant:
+    // - labels may contain extra spaces around the colon;
+    // - blank lines around separators are allowed;
+    // - matching is case-insensitive.
+    $pattern = '/^={10,}[^\S\n]*\n\s*(PAGINA|BERICHT|PRODUCT)\s*:\s*(.*?)\n\s*URL\s*:\s*(.*?)\n\s*ID\s*:\s*(\d+)\s*\n={10,}[^\S\n]*(?:\n)+(.*?)(?=^={10,}[^\S\n]*\n\s*(?:PAGINA|BERICHT|PRODUCT)\s*:|\z)/ims';
 
     if (preg_match_all($pattern, $txt, $matches, PREG_SET_ORDER)) {
         foreach ($matches as $m) {
@@ -2231,7 +2262,7 @@ function dca_tb_parse_bulk_file($txt) {
     }
 
     return empty($items)
-        ? new WP_Error('dca_invalid_import_format', 'Geen geldige blokken gevonden. Gebruik tekst met PAGINA/BERICHT/PRODUCT, URL en ID.')
+        ? new WP_Error('dca_invalid_import_format', 'Geen geldige blokken gevonden. Gebruik tekst met PAGINA/BERICHT/PRODUCT, URL en ID uit een Content Sync-export.')
         : $items;
 }
 
@@ -2240,6 +2271,10 @@ function dca_tb_bulk_preview($txt) {
 
     if (is_wp_error($items)) {
         return $items;
+    }
+
+    if (count($items) > DCA_TB_MAX_IMPORT_PAGES) {
+        return new WP_Error('dca_too_many_import_pages', 'Import bevat ' . count($items) . ' items. Maximaal toegestaan: ' . absint(DCA_TB_MAX_IMPORT_PAGES) . '.');
     }
 
     $preview = [];
@@ -2636,9 +2671,16 @@ function dca_tb_require_manager_access() {
     }
 }
 
-add_action('wp_ajax_dca_get_acf_textblock', function () {
-    check_ajax_referer('dca_acf_textblock_nonce', 'nonce');
+function dca_tb_require_ajax_access() {
+    if (!check_ajax_referer('dca_acf_textblock_nonce', 'nonce', false)) {
+        wp_send_json_error(['message' => 'Beveiligingscontrole verlopen of ongeldig. Herlaad de adminpagina en probeer opnieuw.'], 403);
+    }
+
     dca_tb_require_manager_access();
+}
+
+add_action('wp_ajax_dca_get_acf_textblock', function () {
+    dca_tb_require_ajax_access();
 
     $post_id = absint($_POST['post_id'] ?? 0);
 
@@ -2654,8 +2696,7 @@ add_action('wp_ajax_dca_get_acf_textblock', function () {
 });
 
 add_action('wp_ajax_dca_preload_acf_textblocks', function () {
-    check_ajax_referer('dca_acf_textblock_nonce', 'nonce');
-    dca_tb_require_manager_access();
+    dca_tb_require_ajax_access();
 
     $post_ids = isset($_POST['post_ids']) && is_array($_POST['post_ids'])
         ? dca_tb_sanitize_post_id_list($_POST['post_ids'])
@@ -2683,8 +2724,7 @@ add_action('wp_ajax_dca_preload_acf_textblocks', function () {
 });
 
 add_action('wp_ajax_dca_save_acf_textblock', function () {
-    check_ajax_referer('dca_acf_textblock_nonce', 'nonce');
-    dca_tb_require_manager_access();
+    dca_tb_require_ajax_access();
 
     $post_id = absint($_POST['post_id'] ?? 0);
     $text = isset($_POST['textblock']) ? wp_unslash($_POST['textblock']) : '';
@@ -2710,8 +2750,7 @@ add_action('wp_ajax_dca_save_acf_textblock', function () {
 });
 
 add_action('wp_ajax_dca_bulk_get_acf_textblocks', function () {
-    check_ajax_referer('dca_acf_textblock_nonce', 'nonce');
-    dca_tb_require_manager_access();
+    dca_tb_require_ajax_access();
 
     $post_ids = isset($_POST['post_ids']) && is_array($_POST['post_ids'])
         ? dca_tb_sanitize_post_id_list($_POST['post_ids'])
@@ -2738,8 +2777,7 @@ add_action('wp_ajax_dca_bulk_get_acf_textblocks', function () {
 });
 
 add_action('wp_ajax_dca_txt_import_preview', function () {
-    check_ajax_referer('dca_acf_textblock_nonce', 'nonce');
-    dca_tb_require_manager_access();
+    dca_tb_require_ajax_access();
 
     $preview = dca_tb_bulk_preview(isset($_POST['txt_content']) ? wp_unslash($_POST['txt_content']) : '');
 
@@ -2751,8 +2789,7 @@ add_action('wp_ajax_dca_txt_import_preview', function () {
 });
 
 add_action('wp_ajax_dca_txt_import_run', function () {
-    check_ajax_referer('dca_acf_textblock_nonce', 'nonce');
-    dca_tb_require_manager_access();
+    dca_tb_require_ajax_access();
 
     $result = dca_tb_bulk_save(isset($_POST['txt_content']) ? wp_unslash($_POST['txt_content']) : '');
 
@@ -2773,8 +2810,7 @@ add_action('wp_ajax_dca_txt_import_run', function () {
 
 
 add_action('wp_ajax_dca_get_last_import_log', function () {
-    check_ajax_referer('dca_acf_textblock_nonce', 'nonce');
-    dca_tb_require_manager_access();
+    dca_tb_require_ajax_access();
 
     wp_send_json_success([
         'log'      => dca_tb_get_last_import_log(),
@@ -2784,8 +2820,7 @@ add_action('wp_ajax_dca_get_last_import_log', function () {
 });
 
 add_action('wp_ajax_dca_restore_last_page_backup', function () {
-    check_ajax_referer('dca_acf_textblock_nonce', 'nonce');
-    dca_tb_require_manager_access();
+    dca_tb_require_ajax_access();
 
     $post_id = absint($_POST['post_id'] ?? 0);
     $restore = dca_tb_restore_last_page_backup($post_id);
@@ -2798,8 +2833,7 @@ add_action('wp_ajax_dca_restore_last_page_backup', function () {
 });
 
 add_action('wp_ajax_dca_restore_last_media_backup', function () {
-    check_ajax_referer('dca_acf_textblock_nonce', 'nonce');
-    dca_tb_require_manager_access();
+    dca_tb_require_ajax_access();
 
     $attachment_id = absint($_POST['attachment_id'] ?? 0);
     $restore = dca_tb_restore_last_media_backup($attachment_id);
@@ -2844,6 +2878,7 @@ function dca_tb_get_admin_asset_settings() {
         'filterUrl'   => esc_url_raw($filter_url),
         'notDoneUrl'  => esc_url_raw($not_done_url),
         'filterLabel' => $status_filter === 'not_done' ? 'Toon alles' : 'Verberg vandaag bijgewerkt',
+        'ajaxUrl'     => admin_url('admin-ajax.php'),
     ];
 }
 

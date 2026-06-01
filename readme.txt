@@ -4,7 +4,7 @@ Tags: admin, acf, yoast, import
 Requires at least: 6.2
 Tested up to: 7.0
 Requires PHP: 7.4
-Stable tag: 1.2.6
+Stable tag: 1.2.12
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -24,6 +24,14 @@ Deze private plugin voegt een compacte admin bulkeditor toe voor pagina's, beric
 4. Test eerst export, preview en daarna import.
 
 == Changelog ==
+
+= 1.2.12 =
+* Grote gerichte bugfix-release voor admin-functies die stil konden falen.
+* Toolbar-opbouw robuuster gemaakt als bestaande markup of conflicterende toolbar aanwezig is.
+* Bulk/import-preview blokkeert opslaan als de AJAX-response geen geldige items bevat.
+* ACF image/file/gallery-export gebruikt echte enters in plaats van letterlijke \n-tekst.
+* ACF-detectie gebruikt nu primair onbewerkte waarden, met fallback naar geformatteerde waarden.
+* Resolver voorkomt foutieve titelmatch bij lege titel en blijft backwards-compatible voor ID-only imports.
 
 = 1.2.6 =
 * Beperkt admin-UI en filters tot berichten, pagina’s en producten.
