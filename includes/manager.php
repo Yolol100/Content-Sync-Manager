@@ -12,7 +12,7 @@ defined('ABSPATH') || exit;
  */
 
 if (!defined('DCA_TB_ALLOW_MEDIA_FILE_RENAME')) {
-    define('DCA_TB_ALLOW_MEDIA_FILE_RENAME', true);
+    define('DCA_TB_ALLOW_MEDIA_FILE_RENAME', false);
 }
 
 if (!defined('DCA_TB_DELETE_OLD_IMAGE_SIZES_AFTER_RENAME')) {
@@ -1269,6 +1269,11 @@ function dca_tb_preview_media_changes($textblock) {
         }
         $summary['updates']++;
         if (trim((string) ($item['new_filename'] ?? '')) !== '') {
+            if (!DCA_TB_ALLOW_MEDIA_FILE_RENAME) {
+                $summary['messages'][] = 'Attachment #' . $id . ': bestandsnaamwijziging genegeerd omdat media hernoemen uit staat.';
+                continue;
+            }
+
             $prepared = dca_tb_prepare_new_media_filename(dca_tb_media_filename($id), $item['new_filename']);
             if (is_wp_error($prepared)) {
                 $summary['errors']++;
@@ -2671,6 +2676,21 @@ function dca_tb_require_manager_access() {
     }
 }
 
+
+function dca_tb_request_has_destructive_confirmation() {
+    return isset($_POST['destructive_confirm']) && hash_equals('1', (string) wp_unslash($_POST['destructive_confirm']));
+}
+
+function dca_tb_require_destructive_confirmation() {
+    if (DCA_TB_IMPORT_DRY_RUN) {
+        return;
+    }
+
+    if (!dca_tb_request_has_destructive_confirmation()) {
+        wp_send_json_error(['message' => 'Opslaan of importeren is geblokkeerd: bevestig de destructieve actie opnieuw.'], 403);
+    }
+}
+
 function dca_tb_require_ajax_access() {
     if (!check_ajax_referer('dca_acf_textblock_nonce', 'nonce', false)) {
         wp_send_json_error(['message' => 'Beveiligingscontrole verlopen of ongeldig. Herlaad de adminpagina en probeer opnieuw.'], 403);
@@ -2725,6 +2745,7 @@ add_action('wp_ajax_dca_preload_acf_textblocks', function () {
 
 add_action('wp_ajax_dca_save_acf_textblock', function () {
     dca_tb_require_ajax_access();
+    dca_tb_require_destructive_confirmation();
 
     $post_id = absint($_POST['post_id'] ?? 0);
     $text = isset($_POST['textblock']) ? wp_unslash($_POST['textblock']) : '';
@@ -2790,6 +2811,7 @@ add_action('wp_ajax_dca_txt_import_preview', function () {
 
 add_action('wp_ajax_dca_txt_import_run', function () {
     dca_tb_require_ajax_access();
+    dca_tb_require_destructive_confirmation();
 
     $result = dca_tb_bulk_save(isset($_POST['txt_content']) ? wp_unslash($_POST['txt_content']) : '');
 
@@ -2821,6 +2843,7 @@ add_action('wp_ajax_dca_get_last_import_log', function () {
 
 add_action('wp_ajax_dca_restore_last_page_backup', function () {
     dca_tb_require_ajax_access();
+    dca_tb_require_destructive_confirmation();
 
     $post_id = absint($_POST['post_id'] ?? 0);
     $restore = dca_tb_restore_last_page_backup($post_id);
@@ -2834,6 +2857,7 @@ add_action('wp_ajax_dca_restore_last_page_backup', function () {
 
 add_action('wp_ajax_dca_restore_last_media_backup', function () {
     dca_tb_require_ajax_access();
+    dca_tb_require_destructive_confirmation();
 
     $attachment_id = absint($_POST['attachment_id'] ?? 0);
     $restore = dca_tb_restore_last_media_backup($attachment_id);

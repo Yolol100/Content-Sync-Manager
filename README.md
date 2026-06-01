@@ -14,7 +14,7 @@ Admin-only mini-plugin voor TXT export/import van berichten, pagina’s en produ
 - Test eerst op staging.
 - Maak vooraf een database- en uploads-back-up.
 - Gebruik altijd eerst `Controleer bestand` voordat je importeert.
-- Media hernoemen staat standaard aan via `DCA_TB_ALLOW_MEDIA_FILE_RENAME`.
+- Media hernoemen staat standaard uit via `DCA_TB_ALLOW_MEDIA_FILE_RENAME`; zet dit alleen bewust aan op staging of na acceptatie.
 
 ## Vereisten
 

@@ -234,7 +234,7 @@ document.addEventListener('DOMContentLoaded',function(){
                 if(!confirm('Weet je zeker dat je dit contentblok wilt opslaan? Er wordt automatisch eerst een back-up gemaakt.'))return;
                 this.disabled=true;status(singleStatus,'Back-up maken en opslaan...','');
     
-                ajax('dca_save_acf_textblock',{post_id:currentPostId,textblock:singleOut.value}).then(d=>{
+                ajax('dca_save_acf_textblock',{post_id:currentPostId,textblock:singleOut.value,destructive_confirm:'1'}).then(d=>{
                     this.disabled=false;
                     if(!d||!d.success){status(singleStatus,d&&d.data&&d.data.message?d.data.message:'Opslaan mislukt.','is-error');return}
                     singleInitial=singleOut.value;
@@ -342,7 +342,7 @@ document.addEventListener('DOMContentLoaded',function(){
                 this.disabled=true;
                 status(bulkStatus,'Back-ups maken en bulk opslaan...','');
     
-                ajax('dca_txt_import_run',{txt_content:bulkOut.value}).then(d=>{
+                ajax('dca_txt_import_run',{txt_content:bulkOut.value,destructive_confirm:'1'}).then(d=>{
                     this.disabled=false;
                     if(!d||!d.success){status(bulkStatus,d&&d.data&&d.data.message?d.data.message:'Bulk opslaan mislukt.','is-error');return}
                     if(d.data&&d.data.items){renderPreview(bulkPreview,d.data.items)}
@@ -410,7 +410,7 @@ document.addEventListener('DOMContentLoaded',function(){
                 this.disabled=true;
                 status(importStatus,'Back-ups maken en importeren...','');
     
-                ajax('dca_txt_import_run',{txt_content:importTxt}).then(d=>{
+                ajax('dca_txt_import_run',{txt_content:importTxt,destructive_confirm:'1'}).then(d=>{
                     if(!d||!d.success){status(importStatus,d&&d.data&&d.data.message?d.data.message:'Import mislukt.','is-error');this.disabled=false;return}
                     if(d.data&&d.data.items){renderPreview(importPreviewBox,d.data.items)}
                     status(importStatus,d.data.message||'Import voltooid.','is-success');
