@@ -27,6 +27,18 @@ if (!defined('DCA_TB_IMPORT_DRY_RUN')) {
     define('DCA_TB_IMPORT_DRY_RUN', false);
 }
 
+if (!defined('DCA_TB_OVERWRITE_EXISTING_MEDIA')) {
+    define('DCA_TB_OVERWRITE_EXISTING_MEDIA', false);
+}
+
+if (!defined('DCA_TB_OVERWRITE_EXISTING_TEXT')) {
+    define('DCA_TB_OVERWRITE_EXISTING_TEXT', false);
+}
+
+if (!defined('DCA_TB_OVERWRITE_EXISTING_TITLE')) {
+    define('DCA_TB_OVERWRITE_EXISTING_TITLE', false);
+}
+
 if (!defined('DCA_TB_MAX_IMPORT_PAGES')) {
     define('DCA_TB_MAX_IMPORT_PAGES', 50);
 }
@@ -37,6 +49,10 @@ if (!defined('DCA_TB_MAX_MEDIA_PER_PAGE')) {
 
 if (!defined('DCA_TB_MAX_IMPORT_BYTES')) {
     define('DCA_TB_MAX_IMPORT_BYTES', 5242880);
+}
+
+if (!defined('DCA_TB_LIGHT_ADMIN_LIST')) {
+    define('DCA_TB_LIGHT_ADMIN_LIST', true);
 }
 
 function dca_tb_usp_fields() {
@@ -221,105 +237,38 @@ function dca_tb_get_list_template_filter() {
     return in_array($template, ['standard'], true) ? $template : '';
 }
 
-function dca_tb_standard_template_meta_query($post_type = '') {
-    $blocked_templates = ['elementor_canvas', 'elementor_header_footer'];
-
-    $meta_query = [
-        'relation' => 'AND',
-        [
-            'relation' => 'OR',
-            [
-                'key'     => '_wp_page_template',
-                'compare' => 'NOT EXISTS',
-            ],
-            [
-                'key'     => '_wp_page_template',
-                'value'   => '',
-                'compare' => '=',
-            ],
-            [
-                'key'     => '_wp_page_template',
-                'value'   => 'default',
-                'compare' => '=',
-            ],
-            [
-                'key'     => '_wp_page_template',
-                'value'   => $blocked_templates,
-                'compare' => 'NOT IN',
-            ],
-        ],
-        [
-            'relation' => 'OR',
-            [
-                'key'     => '_elementor_page_template',
-                'compare' => 'NOT EXISTS',
-            ],
-            [
-                'key'     => '_elementor_page_template',
-                'value'   => '',
-                'compare' => '=',
-            ],
-            [
-                'key'     => '_elementor_page_template',
-                'value'   => 'default',
-                'compare' => '=',
-            ],
-            [
-                'key'     => '_elementor_page_template',
-                'value'   => $blocked_templates,
-                'compare' => 'NOT IN',
-            ],
-        ],
-    ];
-
-    $meta_query[] = [
-        'relation' => 'OR',
-        [
-            'key'     => '_elementor_page_settings',
-            'compare' => 'NOT EXISTS',
-        ],
-        [
-            'key'     => '_elementor_page_settings',
-            'value'   => 'elementor_canvas',
-            'compare' => 'NOT LIKE',
-        ],
-    ];
-
-    $meta_query[] = [
-        'relation' => 'OR',
-        [
-            'key'     => '_elementor_page_settings',
-            'compare' => 'NOT EXISTS',
-        ],
-        [
-            'key'     => '_elementor_page_settings',
-            'value'   => 'elementor_header_footer',
-            'compare' => 'NOT LIKE',
-        ],
-    ];
-
-    if ($post_type === 'page') {
-        $meta_query[] = [
-            'relation' => 'OR',
-            [
-                'key'     => '_wp_page_template',
-                'compare' => 'NOT EXISTS',
-            ],
-            [
-                'key'     => '_wp_page_template',
-                'value'   => '',
-                'compare' => '=',
-            ],
-            [
-                'key'     => '_wp_page_template',
-                'value'   => 'default',
-                'compare' => '=',
-            ],
-        ];
+function dca_tb_apply_standard_template_filter_where($where, $query) {
+    if (!is_admin() || !$query->is_main_query() || !$query->get('dca_tb_standard_template_filter')) {
+        return $where;
     }
 
-    return $meta_query;
+    global $wpdb;
+
+    $post_type = sanitize_key((string) $query->get('dca_tb_standard_template_filter'));
+    $blocked = ['elementor_canvas', 'elementor_header_footer'];
+    $blocked_sql = "'" . implode("','", array_map('esc_sql', $blocked)) . "'";
+
+    // AI-PATCH: houd de templatefilter bewust licht. Geen LIKE op geserialiseerde Elementor settings,
+    // omdat dat grote adminlijsten kan laten vastlopen. We sluiten alleen expliciete template-meta uit.
+    if ($post_type === 'page') {
+        $where .= " AND NOT EXISTS (
+            SELECT 1 FROM {$wpdb->postmeta} dca_tpl_page_custom
+            WHERE dca_tpl_page_custom.post_id = {$wpdb->posts}.ID
+            AND dca_tpl_page_custom.meta_key = '_wp_page_template'
+            AND dca_tpl_page_custom.meta_value NOT IN ('', 'default')
+        )";
+    }
+
+    $where .= " AND NOT EXISTS (
+        SELECT 1 FROM {$wpdb->postmeta} dca_tpl_el_blocked
+        WHERE dca_tpl_el_blocked.post_id = {$wpdb->posts}.ID
+        AND dca_tpl_el_blocked.meta_key IN ('_elementor_page_template', '_elementor_template_type')
+        AND dca_tpl_el_blocked.meta_value IN ({$blocked_sql})
+    )";
+
+    return $where;
 }
+add_filter('posts_where', 'dca_tb_apply_standard_template_filter_where', 10, 2);
 
 add_action('pre_get_posts', function ($q) {
     if (!is_admin() || !$q->is_main_query()) return;
@@ -334,7 +283,8 @@ add_action('pre_get_posts', function ($q) {
         return;
     }
 
-    $meta_query = (array) $q->get('meta_query');
+    $meta_query = $q->get('meta_query');
+    $meta_query = is_array($meta_query) ? $meta_query : [];
     $today_start = dca_tb_today_start_timestamp();
 
     if ($status === 'not_done') {
@@ -366,12 +316,13 @@ add_action('pre_get_posts', function ($q) {
     }
 
     if ($template_filter === 'standard') {
-        // Toon alleen standaardtemplates voor pagina's, berichten en producten.
-        // Elementor Canvas en Elementor Full Width worden op alle ondersteunde post types uitgesloten.
-        $meta_query[] = dca_tb_standard_template_meta_query($post_type);
+        // Toon alleen standaardtemplates zonder zware WP_Meta_Query JOINs.
+        $q->set('dca_tb_standard_template_filter', $post_type);
     }
 
-    $q->set('meta_query', $meta_query);
+    if (!empty($meta_query)) {
+        $q->set('meta_query', $meta_query);
+    }
 });
 
 add_action('restrict_manage_posts', function ($post_type) {
@@ -469,6 +420,13 @@ function dca_tb_content_badge($post_id) {
 
     $yoast_title = trim((string) get_post_meta($post_id, '_yoast_wpseo_title', true));
     $yoast_desc  = trim((string) get_post_meta($post_id, '_yoast_wpseo_metadesc', true));
+
+    if (DCA_TB_LIGHT_ADMIN_LIST) {
+        // AI-PATCH: voorkom zware ACF/media/Elementor-detectie per rij in de adminlijst.
+        $yoast_ok = ($yoast_title !== '' && $yoast_desc !== '');
+        return '<span class="dca-badge ' . esc_attr($yoast_ok ? 'dca-badge-green' : 'dca-badge-yellow') . '">Snelle lijstweergave / Yoast ' . esc_html($yoast_ok ? 'ok' : 'mist') . '</span>';
+    }
+
     $media_count = count(dca_tb_collect_media_ids($post_id));
 
     if ($post->post_type === 'post') {
@@ -714,6 +672,7 @@ function dca_tb_validate_featured_image_block($textblock) {
 }
 
 function dca_tb_apply_featured_image_from_textblock($post_id, $textblock) {
+    $current_thumbnail_id = absint(get_post_thumbnail_id($post_id));
     $validation = dca_tb_validate_featured_image_block($textblock);
     if (is_wp_error($validation)) {
         return $validation;
@@ -733,7 +692,14 @@ function dca_tb_apply_featured_image_from_textblock($post_id, $textblock) {
     }
 
     if (!$attachment_id && $url === '') {
+        if (!DCA_TB_OVERWRITE_EXISTING_MEDIA && $current_thumbnail_id) {
+            return true;
+        }
         delete_post_thumbnail($post_id);
+        return true;
+    }
+
+    if (!DCA_TB_OVERWRITE_EXISTING_MEDIA && $current_thumbnail_id && $current_thumbnail_id !== $attachment_id) {
         return true;
     }
 
@@ -1325,6 +1291,8 @@ function dca_tb_save_media_items($post_id, $textblock) {
 
     $replace_pairs = [];
 
+    $linked_ids = dca_tb_collect_media_ids($post_id);
+
     foreach ($items as $item) {
         $id = absint($item['attachment_id'] ?? 0);
 
@@ -1344,6 +1312,11 @@ function dca_tb_save_media_items($post_id, $textblock) {
         if (!current_user_can('edit_post', $id)) {
             $result['media_errors']++;
             $result['messages'][] = 'Media overgeslagen: geen rechten voor attachment #' . $id . '.';
+            continue;
+        }
+
+        if (!DCA_TB_OVERWRITE_EXISTING_MEDIA && isset($linked_ids[$id])) {
+            $result['messages'][] = 'Media overgeslagen voor attachment #' . $id . ': deze media is al gekoppeld aan dit item.';
             continue;
         }
 
@@ -1708,6 +1681,20 @@ function dca_tb_save_dynamic_acf_fields($post_id, $textblock) {
         $value = dca_tb_clean_acf_import_value($item['value'], $field['type']);
         $selector = !empty($field['key']) ? $field['key'] : $field['name'];
 
+        if (!DCA_TB_OVERWRITE_EXISTING_MEDIA && in_array($field['type'], ['image', 'file', 'gallery'], true)) {
+            $current_value = function_exists('get_field') ? get_field($selector, $post_id, false) : null;
+            if (!empty($current_value)) {
+                continue;
+            }
+        }
+
+        if (!DCA_TB_OVERWRITE_EXISTING_TEXT && dca_tb_is_text_like_acf_type($field['type'])) {
+            $current_value = function_exists('get_field') ? get_field($selector, $post_id, false) : get_post_meta($post_id, $field['name'], true);
+            if (dca_tb_has_existing_content_value($current_value)) {
+                continue;
+            }
+        }
+
         update_field($selector, $value, $post_id);
     }
 
@@ -1902,6 +1889,18 @@ function dca_tb_validate_post_textblock($textblock) {
     return true;
 }
 
+function dca_tb_has_existing_content_value($value) {
+    if (is_array($value)) {
+        return !empty($value);
+    }
+
+    return trim(wp_strip_all_tags((string) $value)) !== '';
+}
+
+function dca_tb_is_text_like_acf_type($type) {
+    return in_array((string) $type, ['text', 'textarea', 'wysiwyg', 'oembed', 'email', 'url', 'password', 'number', 'range'], true);
+}
+
 function dca_tb_update_acf_value($field_name, $value, $post_id) {
     $field_name = sanitize_key($field_name);
     $post_id = absint($post_id);
@@ -1959,27 +1958,35 @@ function dca_tb_save_to_fields($post_id, $textblock, $source = 'save') {
         $meta_desc = dca_tb_label($yoast, 'Meta description:');
 
         $post_update = [
-            'ID'           => $post_id,
-            'post_title'   => dca_tb_clean_text($title),
-            'post_content' => dca_tb_clean_html($content),
+            'ID' => $post_id,
         ];
 
+        if (DCA_TB_OVERWRITE_EXISTING_TITLE || !dca_tb_has_existing_content_value($post->post_title)) {
+            $post_update['post_title'] = dca_tb_clean_text($title);
+        }
+
+        if (DCA_TB_OVERWRITE_EXISTING_TEXT || !dca_tb_has_existing_content_value($post->post_content)) {
+            $post_update['post_content'] = dca_tb_clean_html($content);
+        }
+
         $summary = dca_tb_section($textblock, 'SAMENVATTING', ['UITGELICHTE AFBEELDING', 'MEDIA']);
-        if ($summary !== null) {
+        if ($summary !== null && (DCA_TB_OVERWRITE_EXISTING_TEXT || !dca_tb_has_existing_content_value($post->post_excerpt))) {
             $post_update['post_excerpt'] = dca_tb_clean_text($summary);
         }
 
-        $updated = wp_update_post($post_update, true);
+        if (count($post_update) > 1) {
+            $updated = wp_update_post($post_update, true);
 
-        if (is_wp_error($updated)) {
-            return $updated;
+            if (is_wp_error($updated)) {
+                return $updated;
+            }
         }
 
-        if ($seo_title !== null) {
+        if ($seo_title !== null && (DCA_TB_OVERWRITE_EXISTING_TEXT || !dca_tb_has_existing_content_value(get_post_meta($post_id, '_yoast_wpseo_title', true)))) {
             update_post_meta($post_id, '_yoast_wpseo_title', dca_tb_clean_text($seo_title));
         }
 
-        if ($meta_desc !== null) {
+        if ($meta_desc !== null && (DCA_TB_OVERWRITE_EXISTING_TEXT || !dca_tb_has_existing_content_value(get_post_meta($post_id, '_yoast_wpseo_metadesc', true)))) {
             update_post_meta($post_id, '_yoast_wpseo_metadesc', dca_tb_clean_text($meta_desc));
         }
 
@@ -2028,17 +2035,17 @@ function dca_tb_save_to_fields($post_id, $textblock, $source = 'save') {
         $seo_title = dca_tb_label($yoast, 'SEO title:', ['Meta description:']);
         $meta_desc = dca_tb_label($yoast, 'Meta description:');
 
-        if ($seo_title !== null) {
+        if ($seo_title !== null && (DCA_TB_OVERWRITE_EXISTING_TEXT || !dca_tb_has_existing_content_value(get_post_meta($post_id, '_yoast_wpseo_title', true)))) {
             update_post_meta($post_id, '_yoast_wpseo_title', dca_tb_clean_text($seo_title));
         }
 
-        if ($meta_desc !== null) {
+        if ($meta_desc !== null && (DCA_TB_OVERWRITE_EXISTING_TEXT || !dca_tb_has_existing_content_value(get_post_meta($post_id, '_yoast_wpseo_metadesc', true)))) {
             update_post_meta($post_id, '_yoast_wpseo_metadesc', dca_tb_clean_text($meta_desc));
         }
     }
 
     $summary = dca_tb_section($textblock, 'SAMENVATTING', ['UITGELICHTE AFBEELDING', 'MEDIA']);
-    if ($summary !== null) {
+    if ($summary !== null && (DCA_TB_OVERWRITE_EXISTING_TEXT || !dca_tb_has_existing_content_value($post->post_excerpt))) {
         $updated_excerpt = wp_update_post([
             'ID'           => $post_id,
             'post_excerpt' => dca_tb_clean_text($summary),

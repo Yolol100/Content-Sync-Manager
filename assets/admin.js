@@ -142,7 +142,7 @@ document.addEventListener('DOMContentLoaded',function(){
             function esc(v){return String(v).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#039;')}
             function slug(v){return String(v).toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'')}
     
-            function reloadList(msg){showToast((msg||'Opgeslagen')+'. Lijst wordt bijgewerkt...');setTimeout(function(){window.location.href=notDoneUrl||window.location.href},900)}
+            function reloadList(msg){showToast((msg||'Opgeslagen')+'. Lijst wordt bijgewerkt...');setTimeout(function(){window.location.href=window.location.href},900)}
             function updateSelectionToast(){showToast('Content Syncken: '+selectedIds().length+' geselecteerd')}
             function deselectAll(){
                 $$('tbody th.check-column input[type="checkbox"][name="post[]"], #cb-select-all-1, #cb-select-all-2').forEach(c=>{c.checked=false;c.indeterminate=false});
@@ -158,7 +158,9 @@ document.addEventListener('DOMContentLoaded',function(){
                 ajax('dca_preload_acf_textblocks',{post_ids:ids}).then(d=>{if(d&&d.success&&d.data.items)cache=d.data.items}).catch(()=>{});
             }
     
-            preload();
+            // AI-PATCH: automatische preload uitgeschakeld.
+            // Op grote sites bouwde dit direct voor alle zichtbare rijen zware ACF/media/Yoast exports via AJAX,
+            // waardoor pagina-/bericht-/productlijsten konden vastlopen. Content wordt nu pas opgehaald bij openen/exporteren.
     
             function saveBulkDraft(){
                 try{
@@ -182,13 +184,35 @@ document.addEventListener('DOMContentLoaded',function(){
                 }
             }
     
+            function importableItems(items){
+                return Array.isArray(items) ? items.filter(i=>i && (i.status==='success'||i.status==='partial')) : [];
+            }
+
+            function previewSummary(items){
+                if(!Array.isArray(items)||!items.length)return '';
+                const ok=importableItems(items).length;
+                const blocked=items.length-ok;
+                return ok+' importeerbaar, '+blocked+' geblokkeerd.';
+            }
+
+            function setButtonEnabled(button,enabled){
+                button.disabled=!enabled;
+                if(enabled){
+                    button.removeAttribute('disabled');
+                }else{
+                    button.setAttribute('disabled','disabled');
+                }
+            }
+
             function renderPreview(box,items){
                 if(!Array.isArray(items)){
                     box.innerHTML='<p class="dca-error">Geen geldige preview ontvangen.</p>';
                     box.style.display='block';
                     return;
                 }
-                let html='<table><thead><tr><th>Bron</th><th>Gekoppelde pagina</th><th>Status</th></tr></thead><tbody>';
+                const summary=previewSummary(items);
+                let html=summary?'<p><strong>Controle:</strong> '+esc(summary)+'</p>':'';
+                html+='<table><thead><tr><th>Bron</th><th>Gekoppelde pagina</th><th>Status</th></tr></thead><tbody>';
                 items.forEach(i=>{
                     i=i||{};
                     const cls=i.status==='success'?'dca-ok':(i.status==='partial'?'dca-partial':'dca-error');
@@ -264,7 +288,7 @@ document.addEventListener('DOMContentLoaded',function(){
                 return ajax('dca_bulk_get_acf_textblocks',{post_ids:ids});
             }
     
-            function resetBulkCheck(){bulkChecked=false;bulkSave.disabled=true;bulkPreview.style.display='none';bulkPreview.innerHTML=''}
+            function resetBulkCheck(){bulkChecked=false;setButtonEnabled(bulkSave,false);bulkPreview.style.display='none';bulkPreview.innerHTML=''}
             bulkOut.addEventListener('input',function(){resetBulkCheck();saveBulkDraft()});
     
             toolbarBulk.addEventListener('click',function(){
@@ -313,7 +337,7 @@ document.addEventListener('DOMContentLoaded',function(){
             bulkCheck.addEventListener('click',function(){
                 if(!bulkOut.value.trim()){status(bulkStatus,'Er staat geen tekst om te controleren.','is-error');return}
                 status(bulkStatus,'Controleren...','');
-                bulkSave.disabled=true;
+                setButtonEnabled(bulkSave,false);
                 bulkChecked=false;
     
                 ajax('dca_txt_import_preview',{txt_content:bulkOut.value}).then(d=>{
@@ -321,17 +345,15 @@ document.addEventListener('DOMContentLoaded',function(){
                     const items=Array.isArray(d.data&&d.data.items)?d.data.items:[];
                     renderPreview(bulkPreview,items);
                     if(!items.length){status(bulkStatus,'Controle gaf geen items terug. Opslaan is geblokkeerd.','is-error');return}
+                    const validItems=importableItems(items).length>0;
                     const errors=items.some(i=>i.status!=='success');
+                    bulkChecked=validItems;
+                    setButtonEnabled(bulkSave,validItems);
                     if(errors){
-                        const validItems=items.some(i=>i.status==='success'||i.status==='partial');
-                        bulkChecked=validItems;
-                        bulkSave.disabled=!validItems;
-                        status(bulkStatus, validItems ? 'Er zijn fouten gevonden. Geldige items kunnen alsnog worden opgeslagen; foutieve items worden overgeslagen.' : 'Er zijn alleen fouten gevonden. Er is niets om op te slaan.','is-error');
+                        status(bulkStatus, validItems ? 'Controle klaar: '+previewSummary(items)+' Geldige items kunnen worden opgeslagen; geblokkeerde items worden overgeslagen.' : 'Controle klaar: '+previewSummary(items)+' Er is niets om op te slaan. Bekijk de rode meldingen per item.','is-error');
                         return;
                     }
-                    bulkChecked=true;
-                    bulkSave.disabled=false;
-                    status(bulkStatus,'Controle geslaagd. Klaar om bulk op te slaan.','is-success');
+                    status(bulkStatus,'Controle geslaagd. '+previewSummary(items)+' Klaar om bulk op te slaan.','is-success');
                 }).catch(()=>status(bulkStatus,'Controle mislukt.','is-error'));
             });
     
@@ -357,7 +379,7 @@ document.addEventListener('DOMContentLoaded',function(){
             bulkDownload.addEventListener('click',()=>{download(bulkOut.value,bulkFilename);status(bulkStatus,'TXT-bestand gedownload.','is-success')});
             bulkClose.addEventListener('click',()=>closeSafe(bulkModal,'bulk'));
     
-            toolbarImport.addEventListener('click',()=>{importTxt='';importOk=false;importFile.value='';importPreviewBox.innerHTML='';importPreviewBox.style.display='none';importRun.disabled=true;status(importStatus,'','');open(importModal)});
+            toolbarImport.addEventListener('click',()=>{importTxt='';importOk=false;importFile.value='';importPreviewBox.innerHTML='';importPreviewBox.style.display='none';setButtonEnabled(importRun,false);status(importStatus,'','');open(importModal)});
             importClose.addEventListener('click',()=>close(importModal));
     
             function readFile(){
@@ -377,7 +399,7 @@ document.addEventListener('DOMContentLoaded',function(){
                 importOk=false;
                 importPreviewBox.innerHTML='';
                 importPreviewBox.style.display='none';
-                importRun.disabled=true;
+                setButtonEnabled(importRun,false);
                 status(importStatus,'Bestand lezen...','');
     
                 readFile().then(txt=>{
@@ -389,17 +411,15 @@ document.addEventListener('DOMContentLoaded',function(){
                     const items=Array.isArray(d.data&&d.data.items)?d.data.items:[];
                     renderPreview(importPreviewBox,items);
                     if(!items.length){status(importStatus,'Controle gaf geen items terug. Importeren is geblokkeerd.','is-error');return}
+                    const validItems=importableItems(items).length>0;
                     const errors=items.some(i=>i.status!=='success');
+                    importOk=validItems;
+                    setButtonEnabled(importRun,validItems);
                     if(errors){
-                        const validItems=items.some(i=>i.status==='success'||i.status==='partial');
-                        importOk=validItems;
-                        importRun.disabled=!validItems;
-                        status(importStatus, validItems ? 'Er zijn fouten gevonden. Geldige items kunnen alsnog worden geïmporteerd; foutieve items worden overgeslagen.' : 'Er zijn alleen fouten gevonden. Er is niets om te importeren.','is-error');
+                        status(importStatus, validItems ? 'Controle klaar: '+previewSummary(items)+' Geldige items kunnen worden geïmporteerd; geblokkeerde items worden overgeslagen.' : 'Controle klaar: '+previewSummary(items)+' Er is niets om te importeren. Bekijk de rode meldingen per item.','is-error');
                         return;
                     }
-                    importOk=true;
-                    importRun.disabled=false;
-                    status(importStatus,'Controle geslaagd. Klaar om te importeren.','is-success');
+                    status(importStatus,'Controle geslaagd. '+previewSummary(items)+' Klaar om te importeren.','is-success');
                 }).catch(m=>status(importStatus,m||'Bestand kon niet gelezen worden.','is-error'));
             });
     

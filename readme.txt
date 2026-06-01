@@ -4,7 +4,7 @@ Tags: admin, acf, yoast, import
 Requires at least: 6.2
 Tested up to: 7.0
 Requires PHP: 7.4
-Stable tag: 1.2.12
+Stable tag: 1.2.21
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -24,6 +24,14 @@ Deze private plugin voegt een compacte admin bulkeditor toe voor pagina's, beric
 4. Test eerst export, preview en daarna import.
 
 == Changelog ==
+
+= 1.2.21 =
+* Na import, bulk opslaan of single save blijft de adminlijst op dezelfde filterstand staan.
+* Automatische redirect naar Contentblok: nog te doen vandaag verwijderd.
+
+= 1.2.20 =
+* Packaging: pluginbestanden staan nu in de map `content-sync-manager` voor voorspelbaarder overschrijven bij upload.
+* Cache-busting: pluginversie verhoogd zodat aangepaste admin-JavaScript niet door browsercache blijft hangen.
 
 = 1.2.12 =
 * Grote gerichte bugfix-release voor admin-functies die stil konden falen.
