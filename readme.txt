@@ -4,7 +4,7 @@ Tags: admin, acf, yoast, import
 Requires at least: 6.2
 Tested up to: 7.0
 Requires PHP: 7.4
-Stable tag: 1.2.4
+Stable tag: 1.2.6
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -14,7 +14,7 @@ Admin-only TXT import/export voor gedetecteerde ACF-velden, Yoast SEO en media-m
 
 Deze plugin draait alleen in de WordPress-admin en voert geen externe tracking, externe asset-loading of externe API-calls uit.
 
-Deze private plugin voegt een compacte admin bulkeditor toe voor pagina's en berichten. De plugin is bedoeld voor gecontroleerde staging-imports en detecteert bestaande ACF-velden per pagina en werkt met Yoast meta en lokale WordPress-afbeeldingen.
+Deze private plugin voegt een compacte admin bulkeditor toe voor pagina's, berichten en producten. De plugin is bedoeld voor gecontroleerde staging-imports en detecteert bestaande ACF-velden per pagina/product en werkt met Yoast meta en lokale WordPress-afbeeldingen.
 
 == Installation ==
 
@@ -24,6 +24,12 @@ Deze private plugin voegt een compacte admin bulkeditor toe voor pagina's en ber
 4. Test eerst export, preview en daarna import.
 
 == Changelog ==
+
+= 1.2.6 =
+* Beperkt admin-UI en filters tot berichten, pagina’s en producten.
+* Producten toegevoegd aan import/export.
+* Standaardtemplate-filter sluit Elementor Canvas en Elementor Full Width uit.
+* Importlogrechten afgestemd op de managerrechten.
 
 = 1.2.4 =
 * Extra lijstfilter toegevoegd voor standaard/ACF-pagina's zonder Elementor-builderdata.

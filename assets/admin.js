@@ -252,7 +252,7 @@ document.addEventListener('DOMContentLoaded',function(){
                     if(errors){
                         bulkChecked=true;
                         bulkSave.disabled=false;
-                        status(bulkStatus,'Er zijn fouten gevonden. Geldige pagina’s kunnen alsnog worden opgeslagen; foutieve pagina’s worden overgeslagen.','is-error');
+                        status(bulkStatus,'Er zijn fouten gevonden. Geldige items kunnen alsnog worden opgeslagen; foutieve items worden overgeslagen.','is-error');
                         return;
                     }
                     bulkChecked=true;
@@ -263,7 +263,7 @@ document.addEventListener('DOMContentLoaded',function(){
     
             bulkSave.addEventListener('click',function(){
                 if(!bulkChecked){status(bulkStatus,'Controleer eerst de bulktekst.','is-error');return}
-                if(!confirm('Weet je zeker dat je deze bulk-tekst wilt opslaan? Geldige pagina’s worden overschreven. Pagina’s met fouten worden overgeslagen. Per geïmporteerde pagina wordt automatisch eerst een back-up gemaakt.'))return;
+                if(!confirm('Weet je zeker dat je deze bulk-tekst wilt opslaan? Geldige items worden overschreven. Items met fouten worden overgeslagen. Per geïmporteerd item wordt automatisch eerst een back-up gemaakt.'))return;
     
                 this.disabled=true;
                 status(bulkStatus,'Back-ups maken en bulk opslaan...','');
@@ -317,7 +317,7 @@ document.addEventListener('DOMContentLoaded',function(){
                     if(errors){
                         importOk=true;
                         importRun.disabled=false;
-                        status(importStatus,'Er zijn fouten gevonden. Geldige pagina’s kunnen alsnog worden geïmporteerd; foutieve pagina’s worden overgeslagen.','is-error');
+                        status(importStatus,'Er zijn fouten gevonden. Geldige items kunnen alsnog worden geïmporteerd; foutieve items worden overgeslagen.','is-error');
                         return;
                     }
                     importOk=true;
@@ -328,7 +328,7 @@ document.addEventListener('DOMContentLoaded',function(){
     
             importRun.addEventListener('click',function(){
                 if(!importOk||!importTxt){status(importStatus,'Controleer eerst het bestand.','is-error');return}
-                if(!confirm('Weet je zeker dat je dit TXT-bestand wilt importeren? Geldige pagina’s worden overschreven. Pagina’s met fouten worden overgeslagen. Per geïmporteerde pagina wordt automatisch eerst een back-up gemaakt.'))return;
+                if(!confirm('Weet je zeker dat je dit TXT-bestand wilt importeren? Geldige items worden overschreven. Items met fouten worden overgeslagen. Per geïmporteerd item wordt automatisch eerst een back-up gemaakt.'))return;
     
                 this.disabled=true;
                 status(importStatus,'Back-ups maken en importeren...','');

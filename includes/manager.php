@@ -44,7 +44,7 @@ function dca_tb_usp_fields() {
 }
 
 function dca_tb_supported_post_types() {
-    return ['page', 'post'];
+    return ['page', 'post', 'product'];
 }
 
 function dca_tb_is_supported_post_type($post_type) {
@@ -66,11 +66,29 @@ function dca_tb_get_admin_post_type() {
 }
 
 function dca_tb_post_type_label_single($post_id) {
-    return get_post_type($post_id) === 'post' ? 'BERICHT' : 'PAGINA';
+    $post_type = get_post_type($post_id);
+
+    if ($post_type === 'post') {
+        return 'BERICHT';
+    }
+
+    if ($post_type === 'product') {
+        return 'PRODUCT';
+    }
+
+    return 'PAGINA';
 }
 
 function dca_tb_post_type_label_plural($post_type) {
-    return $post_type === 'post' ? 'berichten' : 'pagina’s';
+    if ($post_type === 'post') {
+        return 'berichten';
+    }
+
+    if ($post_type === 'product') {
+        return 'producten';
+    }
+
+    return 'pagina’s';
 }
 
 function dca_tb_text($value) {
@@ -203,8 +221,10 @@ function dca_tb_get_list_template_filter() {
     return in_array($template, ['standard'], true) ? $template : '';
 }
 
-function dca_tb_standard_template_meta_query() {
-    return [
+function dca_tb_standard_template_meta_query($post_type = '') {
+    $blocked_templates = ['elementor_canvas', 'elementor_header_footer'];
+
+    $meta_query = [
         'relation' => 'AND',
         [
             'relation' => 'OR',
@@ -222,44 +242,10 @@ function dca_tb_standard_template_meta_query() {
                 'value'   => 'default',
                 'compare' => '=',
             ],
-        ],
-        [
-            'relation' => 'OR',
             [
-                'key'     => '_elementor_edit_mode',
-                'compare' => 'NOT EXISTS',
-            ],
-            [
-                'key'     => '_elementor_edit_mode',
-                'value'   => '',
-                'compare' => '=',
-            ],
-            [
-                'key'     => '_elementor_edit_mode',
-                'value'   => 'builder',
-                'compare' => '!=',
-            ],
-        ],
-        [
-            'relation' => 'OR',
-            [
-                'key'     => '_elementor_data',
-                'compare' => 'NOT EXISTS',
-            ],
-            [
-                'key'     => '_elementor_data',
-                'value'   => '',
-                'compare' => '=',
-            ],
-            [
-                'key'     => '_elementor_data',
-                'value'   => '[]',
-                'compare' => '=',
-            ],
-            [
-                'key'     => '_elementor_data',
-                'value'   => 'a:0:{}',
-                'compare' => '=',
+                'key'     => '_wp_page_template',
+                'value'   => $blocked_templates,
+                'compare' => 'NOT IN',
             ],
         ],
         [
@@ -280,11 +266,59 @@ function dca_tb_standard_template_meta_query() {
             ],
             [
                 'key'     => '_elementor_page_template',
-                'value'   => ['elementor_canvas', 'elementor_header_footer'],
+                'value'   => $blocked_templates,
                 'compare' => 'NOT IN',
             ],
         ],
     ];
+
+    $meta_query[] = [
+        'relation' => 'OR',
+        [
+            'key'     => '_elementor_page_settings',
+            'compare' => 'NOT EXISTS',
+        ],
+        [
+            'key'     => '_elementor_page_settings',
+            'value'   => 'elementor_canvas',
+            'compare' => 'NOT LIKE',
+        ],
+    ];
+
+    $meta_query[] = [
+        'relation' => 'OR',
+        [
+            'key'     => '_elementor_page_settings',
+            'compare' => 'NOT EXISTS',
+        ],
+        [
+            'key'     => '_elementor_page_settings',
+            'value'   => 'elementor_header_footer',
+            'compare' => 'NOT LIKE',
+        ],
+    ];
+
+    if ($post_type === 'page') {
+        $meta_query[] = [
+            'relation' => 'OR',
+            [
+                'key'     => '_wp_page_template',
+                'compare' => 'NOT EXISTS',
+            ],
+            [
+                'key'     => '_wp_page_template',
+                'value'   => '',
+                'compare' => '=',
+            ],
+            [
+                'key'     => '_wp_page_template',
+                'value'   => 'default',
+                'compare' => '=',
+            ],
+        ];
+    }
+
+    return $meta_query;
 }
 
 add_action('pre_get_posts', function ($q) {
@@ -331,16 +365,17 @@ add_action('pre_get_posts', function ($q) {
         ];
     }
 
-    if ($template_filter === 'standard' && $post_type === 'page') {
-        // Toon alleen normale WordPress-pagina's: geen custom page template en geen Elementor-builderdata.
-        $meta_query[] = dca_tb_standard_template_meta_query();
+    if ($template_filter === 'standard') {
+        // Toon alleen standaardtemplates voor pagina's, berichten en producten.
+        // Elementor Canvas en Elementor Full Width worden op alle ondersteunde post types uitgesloten.
+        $meta_query[] = dca_tb_standard_template_meta_query($post_type);
     }
 
     $q->set('meta_query', $meta_query);
 });
 
 add_action('restrict_manage_posts', function ($post_type) {
-    if (!dca_tb_is_supported_post_type($post_type)) {
+    if (!dca_tb_is_supported_post_type($post_type) || !dca_tb_current_user_can_use_manager()) {
         return;
     }
 
@@ -353,15 +388,19 @@ add_action('restrict_manage_posts', function ($post_type) {
     echo '<option value="done_today" ' . selected($current, 'done_today', false) . '>' . esc_html__('Contentblok: vandaag bijgewerkt', 'content-sync-manager') . '</option>';
     echo '</select>';
 
-    if ($post_type === 'page') {
-        echo '<select name="dca_tb_template" id="dca-tb-template-filter">';
-        echo '<option value="">' . esc_html__('Template: alles tonen', 'content-sync-manager') . '</option>';
-        echo '<option value="standard" ' . selected($template_current, 'standard', false) . '>' . esc_html__('Template: alleen standaard / ACF', 'content-sync-manager') . '</option>';
-        echo '</select>';
-    }
+    echo '<select name="dca_tb_template" id="dca-tb-template-filter">';
+    echo '<option value="">' . esc_html__('Template: alles tonen', 'content-sync-manager') . '</option>';
+    echo '<option value="standard" ' . selected($template_current, 'standard', false) . '>' . esc_html__('Template: standaard, zonder Elementor Canvas/Full Width', 'content-sync-manager') . '</option>';
+    echo '</select>';
 });
 
 function dca_tb_add_textblock_column($columns) {
+    $screen = function_exists('get_current_screen') ? get_current_screen() : null;
+
+    if ($screen && isset($screen->post_type) && !dca_tb_is_supported_post_type($screen->post_type)) {
+        return $columns;
+    }
+
     $new = [];
 
     foreach ($columns as $key => $label) {
@@ -394,9 +433,11 @@ function dca_tb_render_textblock_column($column, $post_id) {
 
 add_filter('manage_pages_columns', 'dca_tb_add_textblock_column');
 add_filter('manage_posts_columns', 'dca_tb_add_textblock_column');
+add_filter('manage_product_posts_columns', 'dca_tb_add_textblock_column');
 
 add_action('manage_pages_custom_column', 'dca_tb_render_textblock_column', 10, 2);
 add_action('manage_posts_custom_column', 'dca_tb_render_textblock_column', 10, 2);
+add_action('manage_product_posts_custom_column', 'dca_tb_render_textblock_column', 10, 2);
 
 function dca_tb_update_badge($post_id) {
     $time = absint(get_post_meta($post_id, '_dca_acf_textblock_updated_at', true));
@@ -573,20 +614,11 @@ function dca_tb_template_skip_reason($post_id) {
     $post_type = get_post_type($post_id);
 
     if (!$post_id || !dca_tb_is_supported_post_type($post_type)) {
-        return 'Geen geldig bericht of geldige pagina.';
-    }
-
-    // Berichten gebruiken geen paginatemplate-check. Die mogen altijd mee.
-    if ($post_type === 'post') {
-        return '';
+        return 'Geen geldig bericht, geldige pagina of geldig product.';
     }
 
     if ($post_type === 'page' && get_page_template_slug($post_id) !== '') {
         return 'Overgeslagen: pagina gebruikt geen standaard WordPress-template.';
-    }
-
-    if (dca_tb_has_elementor_builder_content($post_id)) {
-        return 'Overgeslagen: pagina is met Elementor opgebouwd en wordt niet als ACF-standaardtemplate verwerkt.';
     }
 
     if (dca_tb_has_elementor_nonstandard_layout($post_id)) {
@@ -1677,7 +1709,7 @@ function dca_tb_build_textblock($post_id) {
     $post = get_post($post_id);
 
     if (!$post || !dca_tb_is_supported_post_type($post->post_type)) {
-        return 'Geen geldig bericht of geldige pagina gevonden.';
+        return 'Geen geldig bericht, geldige pagina of geldig product gevonden.';
     }
 
     /**
@@ -1889,7 +1921,7 @@ function dca_tb_save_to_fields($post_id, $textblock, $source = 'save') {
     $post = get_post($post_id);
 
     if (!$post || !dca_tb_is_supported_post_type($post->post_type)) {
-        return new WP_Error('dca_invalid_post', 'Geen geldig bericht of geldige pagina gevonden.');
+        return new WP_Error('dca_invalid_post', 'Geen geldig bericht, geldige pagina of geldig product gevonden.');
     }
 
     $textblock = trim(str_replace(["\r\n", "\r"], "\n", (string) $textblock));
@@ -2031,7 +2063,7 @@ function dca_tb_build_bulk_export($post_ids) {
             continue;
         }
 
-        if ($post->post_type === 'page' && dca_tb_template_skip_reason($post_id) !== '') {
+        if (dca_tb_template_skip_reason($post_id) !== '') {
             continue;
         }
 
@@ -2050,7 +2082,7 @@ function dca_tb_build_bulk_export($post_ids) {
     }
 
     return empty($out)
-        ? new WP_Error('dca_no_pages', 'Er zijn geen geldige berichten of pagina’s geselecteerd.')
+        ? new WP_Error('dca_no_pages', 'Er zijn geen geldige berichten, pagina’s of producten geselecteerd.')
         : trim(implode("\n", $out));
 }
 
@@ -2088,12 +2120,32 @@ function dca_tb_url_matches_post($url, $post_id) {
     return $source_path === $target_path;
 }
 
-function dca_tb_resolve_page($page_id, $url, $title) {
+
+function dca_tb_import_label_to_post_type($label) {
+    $label = strtoupper(trim((string) $label));
+
+    if ($label === 'BERICHT') {
+        return 'post';
+    }
+
+    if ($label === 'PRODUCT') {
+        return 'product';
+    }
+
+    return 'page';
+}
+
+function dca_tb_resolve_page($page_id, $url, $title, $expected_post_type = '') {
     $page_id = absint($page_id);
     $url = trim((string) $url);
     $title = trim((string) $title);
+    $expected_post_type = sanitize_key($expected_post_type);
 
-    if ($page_id && ($post = get_post($page_id)) && dca_tb_is_supported_post_type($post->post_type)) {
+    if ($expected_post_type !== '' && !dca_tb_is_supported_post_type($expected_post_type)) {
+        return 0;
+    }
+
+    if ($page_id && ($post = get_post($page_id)) && dca_tb_is_supported_post_type($post->post_type) && ($expected_post_type === '' || $post->post_type === $expected_post_type)) {
         $url_matches = dca_tb_url_matches_post($url, $page_id);
         $title_matches = dca_tb_title_matches_post($title, $page_id);
 
@@ -2107,14 +2159,14 @@ function dca_tb_resolve_page($page_id, $url, $title) {
     if ($url !== '') {
         $url_id = url_to_postid($url);
 
-        if ($url_id && ($post = get_post($url_id)) && dca_tb_is_supported_post_type($post->post_type)) {
+        if ($url_id && ($post = get_post($url_id)) && dca_tb_is_supported_post_type($post->post_type) && ($expected_post_type === '' || $post->post_type === $expected_post_type)) {
             return absint($url_id);
         }
     }
 
     if ($title !== '') {
         $q = new WP_Query([
-            'post_type'      => dca_tb_supported_post_types(),
+            'post_type'      => $expected_post_type !== '' ? [$expected_post_type] : dca_tb_supported_post_types(),
             'post_status'    => 'any',
             'title'          => $title,
             'posts_per_page' => 1,
@@ -2164,21 +2216,22 @@ function dca_tb_parse_bulk_file($txt) {
     }
 
     $items = [];
-    $pattern = '/^={10,}\s*\n(?:PAGINA|BERICHT):\s*(.*?)\nURL:\s*(.*?)\nID:\s*(\d+)\s*\n={10,}\s*\n(.*?)(?=^={10,}\s*\n(?:PAGINA|BERICHT):|\z)/ims';
+    $pattern = '/^={10,}\s*\n(PAGINA|BERICHT|PRODUCT):\s*(.*?)\nURL:\s*(.*?)\nID:\s*(\d+)\s*\n={10,}\s*\n(.*?)(?=^={10,}\s*\n(?:PAGINA|BERICHT|PRODUCT):|\z)/ims';
 
     if (preg_match_all($pattern, $txt, $matches, PREG_SET_ORDER)) {
         foreach ($matches as $m) {
             $items[] = [
-                'source_title' => trim($m[1]),
-                'source_url'   => trim($m[2]),
-                'source_id'    => absint($m[3]),
-                'textblock'    => trim($m[4]),
+                'source_type'  => dca_tb_import_label_to_post_type($m[1]),
+                'source_title' => trim($m[2]),
+                'source_url'   => trim($m[3]),
+                'source_id'    => absint($m[4]),
+                'textblock'    => trim($m[5]),
             ];
         }
     }
 
     return empty($items)
-        ? new WP_Error('dca_invalid_import_format', 'Geen geldige blokken gevonden. Gebruik tekst met PAGINA/BERICHT, URL en ID.')
+        ? new WP_Error('dca_invalid_import_format', 'Geen geldige blokken gevonden. Gebruik tekst met PAGINA/BERICHT/PRODUCT, URL en ID.')
         : $items;
 }
 
@@ -2192,18 +2245,18 @@ function dca_tb_bulk_preview($txt) {
     $preview = [];
 
     foreach ($items as $i => $item) {
-        $target = dca_tb_resolve_page($item['source_id'], $item['source_url'], $item['source_title']);
+        $target = dca_tb_resolve_page($item['source_id'], $item['source_url'], $item['source_title'], $item['source_type'] ?? '');
         $status = 'error';
         $message = '';
         $media = dca_tb_preview_media_changes($item['textblock']);
 
         if (!$target) {
-            $message = 'Overgeslagen: geen bijpassende pagina gevonden.';
+            $message = 'Overgeslagen: geen bijpassend bericht, pagina of product gevonden.';
         } elseif (!current_user_can('edit_post', $target)) {
-            $message = 'Overgeslagen: geen rechten om deze pagina te bewerken.';
+            $message = 'Overgeslagen: geen rechten om dit item te bewerken.';
         } else {
             $target_post = get_post($target);
-            $template_reason = ($target_post && $target_post->post_type === 'page') ? dca_tb_template_skip_reason($target) : '';
+            $template_reason = $target_post ? dca_tb_template_skip_reason($target) : '';
 
             if ($template_reason !== '') {
                 $message = $template_reason;
@@ -2252,7 +2305,7 @@ function dca_tb_bulk_save($txt) {
     }
 
     if (count($items) > DCA_TB_MAX_IMPORT_PAGES) {
-        return new WP_Error('dca_too_many_import_pages', 'Import bevat ' . count($items) . ' pagina’s. Maximaal toegestaan: ' . absint(DCA_TB_MAX_IMPORT_PAGES) . '.');
+        return new WP_Error('dca_too_many_import_pages', 'Import bevat ' . count($items) . ' items. Maximaal toegestaan: ' . absint(DCA_TB_MAX_IMPORT_PAGES) . '.');
     }
 
     $imported = 0;
@@ -2264,7 +2317,7 @@ function dca_tb_bulk_save($txt) {
     $results  = [];
 
     foreach ($items as $i => $item) {
-        $target = dca_tb_resolve_page($item['source_id'], $item['source_url'], $item['source_title']);
+        $target = dca_tb_resolve_page($item['source_id'], $item['source_url'], $item['source_title'], $item['source_type'] ?? '');
         $title  = $item['source_title'] ?: 'Blok ' . ($i + 1);
 
         if (!$target) {
@@ -2276,7 +2329,7 @@ function dca_tb_bulk_save($txt) {
                 'target_post_id' => 0,
                 'target_title'   => '',
                 'status'         => 'skipped',
-                'message'        => 'Overgeslagen: geen bijpassende pagina gevonden.',
+                'message'        => 'Overgeslagen: geen bijpassend bericht, pagina of product gevonden.',
             ];
             continue;
         }
@@ -2290,14 +2343,14 @@ function dca_tb_bulk_save($txt) {
                 'target_post_id' => $target,
                 'target_title'   => get_the_title($target),
                 'status'         => 'skipped',
-                'message'        => 'Overgeslagen: geen rechten om deze pagina te bewerken.',
+                'message'        => 'Overgeslagen: geen rechten om dit item te bewerken.',
             ];
             continue;
         }
 
 
         $target_post = get_post($target);
-        $template_reason = ($target_post && $target_post->post_type === 'page') ? dca_tb_template_skip_reason($target) : '';
+        $template_reason = $target_post ? dca_tb_template_skip_reason($target) : '';
 
         if ($template_reason !== '') {
             $skipped++;
@@ -2574,7 +2627,7 @@ function dca_tb_can_edit_post($post_id) {
 }
 
 function dca_tb_current_user_can_use_manager() {
-    return current_user_can('edit_posts') || current_user_can('edit_pages');
+    return current_user_can('edit_posts') || current_user_can('edit_pages') || current_user_can('edit_products');
 }
 
 function dca_tb_require_manager_access() {
@@ -2723,10 +2776,6 @@ add_action('wp_ajax_dca_get_last_import_log', function () {
     check_ajax_referer('dca_acf_textblock_nonce', 'nonce');
     dca_tb_require_manager_access();
 
-    if (!current_user_can('edit_pages')) {
-        wp_send_json_error(['message' => 'Geen rechten om de importlog te bekijken.']);
-    }
-
     wp_send_json_success([
         'log'      => dca_tb_get_last_import_log(),
         'text'     => dca_tb_format_import_log_text(),
@@ -2783,7 +2832,7 @@ function dca_tb_get_admin_asset_settings() {
         ? admin_url('edit.php')
         : admin_url('edit.php?post_type=' . ($screen ? $screen->post_type : 'page'));
 
-    if ($template_filter !== '' && $screen && $screen->post_type === 'page') {
+    if ($template_filter !== '' && $screen && dca_tb_is_supported_post_type($screen->post_type)) {
         $base_url = add_query_arg('dca_tb_template', $template_filter, $base_url);
     }
 
@@ -2886,7 +2935,7 @@ add_action('admin_footer-edit.php', function () {
                     <button type="button" class="button dca-close-import">Sluiten</button>
                 </div>
                 <div class="dca-content">
-                    <p class="dca-warning">Gebruik een TXT-bestand dat via “Exporteer als .txt” is gemaakt. Berichten en pagina’s met de standaard WordPress-template worden verwerkt; custom templates en pagina’s die met Elementor zijn opgebouwd worden overgeslagen. Media kan alt, title, caption, description en fysieke bestandsnaam wijzigen.</p>
+                    <p class="dca-warning">Gebruik een TXT-bestand dat via “Exporteer als .txt” is gemaakt. Berichten, pagina’s en producten met een standaardtemplate worden verwerkt; Elementor Canvas en Elementor Full Width worden overgeslagen. Media kan alt, title, caption, description en fysieke bestandsnaam wijzigen.</p>
                     <input type="file" id="dca-import-file" accept=".txt,text/plain">
                     <div class="dca-actions">
                         <button type="button" class="button" id="dca-import-preview">Controleer bestand</button>

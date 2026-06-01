@@ -1,12 +1,12 @@
 # Content Sync Manager
 
-Admin-only mini-plugin voor TXT export/import van gedetecteerde ACF-velden, Yoast SEO velden, samenvattingen, uitgelichte afbeeldingen en media-metadata.
+Admin-only mini-plugin voor TXT export/import van berichten, pagina’s en producten met gedetecteerde ACF-velden, Yoast SEO velden, samenvattingen, uitgelichte afbeeldingen en media-metadata.
 
 ## Installatie
 
 1. Upload de map `content-sync-manager` naar `/wp-content/plugins/`.
 2. Activeer de plugin in WordPress.
-3. Open Pagina's of Berichten in de admin.
+3. Open Pagina's, Berichten of Producten in de admin.
 4. Gebruik de SEO-toolbar onderaan het overzicht.
 
 ## Veilig gebruik
@@ -20,13 +20,13 @@ Admin-only mini-plugin voor TXT export/import van gedetecteerde ACF-velden, Yoas
 
 - WordPress 6.2+
 - PHP 7.4+
-- ACF voor paginavelden
+- ACF voor pagina- en productvelden wanneer die via ACF worden beheerd
 - Yoast SEO optioneel voor SEO title/meta description
 
 
 ## Versie
 
-1.2.4
+1.2.6
 
 ## ACF-velden
 
