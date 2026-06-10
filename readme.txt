@@ -2,9 +2,9 @@
 Contributors: webactueel
 Tags: admin, acf, yoast, import
 Requires at least: 6.2
-Tested up to: 7.0
+Tested up to: 6.2
 Requires PHP: 7.4
-Stable tag: 1.2.21
+Stable tag: 1.2.23
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -24,6 +24,12 @@ Deze private plugin voegt een compacte admin bulkeditor toe voor pagina's, beric
 4. Test eerst export, preview en daarna import.
 
 == Changelog ==
+
+= 1.2.23 =
+* Featured-imageblok uitgebreid met bestandsnaam, nieuwe bestandsnaam, title, alt, caption en description.
+* MEDIA-blok toont nu de bron per afbeelding, zoals featured_image, post_content of acf:veldnaam.
+* ACF-media-detectie loopt nu recursief door image, file, gallery, group, repeater en flexible_content velden die ACF op dat moment detecteert.
+* Media-metadata-update gecentraliseerd zodat title, alt, caption en description consistent worden opgeslagen.
 
 = 1.2.21 =
 * Na import, bulk opslaan of single save blijft de adminlijst op dezelfde filterstand staan.

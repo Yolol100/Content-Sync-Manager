@@ -623,6 +623,7 @@ function dca_tb_featured_image_end_markers() {
 
 function dca_tb_build_featured_image_block($post_id) {
     $thumb_id = get_post_thumbnail_id($post_id);
+    $attachment = $thumb_id ? get_post($thumb_id) : null;
     $out = ['UITGELICHTE AFBEELDING'];
 
     array_push(
@@ -634,8 +635,18 @@ function dca_tb_build_featured_image_block($post_id) {
         'URL:',
         $thumb_id ? (string) wp_get_attachment_url($thumb_id) : '',
         '',
+        'Bestandsnaam:',
+        $thumb_id ? dca_tb_media_filename($thumb_id) : '',
+        'Nieuwe bestandsnaam:',
+        '',
+        'Title:',
+        $attachment ? dca_tb_text($attachment->post_title) : '',
         'Alt text:',
-        $thumb_id ? dca_tb_text(get_post_meta($thumb_id, '_wp_attachment_image_alt', true)) : ''
+        $thumb_id ? dca_tb_text(get_post_meta($thumb_id, '_wp_attachment_image_alt', true)) : '',
+        'Caption:',
+        $attachment ? dca_tb_text($attachment->post_excerpt) : '',
+        'Description:',
+        $attachment ? dca_tb_text($attachment->post_content) : ''
     );
 
     return trim(implode("\n", $out));
@@ -650,8 +661,13 @@ function dca_tb_parse_featured_image_block($textblock) {
 
     return [
         'attachment_id' => absint(dca_tb_label($block, 'Attachment ID:', ['URL:'])),
-        'url'           => dca_tb_label($block, 'URL:', ['Alt text:']),
-        'alt'           => dca_tb_label($block, 'Alt text:'),
+        'url'           => dca_tb_label($block, 'URL:', ['Bestandsnaam:', 'Alt text:']),
+        'filename'      => dca_tb_label($block, 'Bestandsnaam:', ['Nieuwe bestandsnaam:', 'Title:', 'Alt text:']),
+        'new_filename'  => dca_tb_label($block, 'Nieuwe bestandsnaam:', ['Title:', 'Alt text:']),
+        'title'         => dca_tb_label($block, 'Title:', ['Alt text:']),
+        'alt'           => dca_tb_label($block, 'Alt text:', ['Caption:']),
+        'caption'       => dca_tb_label($block, 'Caption:', ['Description:']),
+        'description'   => dca_tb_label($block, 'Description:'),
     ];
 }
 
@@ -662,13 +678,28 @@ function dca_tb_validate_featured_image_block($textblock) {
         return true;
     }
 
-    foreach (['Attachment ID:', 'URL:', 'Alt text:'] as $label) {
+    foreach (['Attachment ID:', 'URL:', 'Bestandsnaam:', 'Nieuwe bestandsnaam:', 'Title:', 'Alt text:', 'Caption:', 'Description:'] as $label) {
         if (dca_tb_label_marker_count($block, $label) !== 1) {
             return new WP_Error('dca_invalid_featured_image', 'Opslaan gestopt: "' . $label . '" ontbreekt of komt meerdere keren voor onder UITGELICHTE AFBEELDING.');
         }
     }
 
     return true;
+}
+
+function dca_tb_featured_image_has_media_item($attachment_id, $textblock) {
+    $attachment_id = absint($attachment_id);
+    if (!$attachment_id) {
+        return false;
+    }
+
+    foreach (dca_tb_parse_media_blocks($textblock) as $item) {
+        if (absint($item['attachment_id'] ?? 0) === $attachment_id) {
+            return true;
+        }
+    }
+
+    return false;
 }
 
 function dca_tb_apply_featured_image_from_textblock($post_id, $textblock) {
@@ -713,8 +744,28 @@ function dca_tb_apply_featured_image_from_textblock($post_id, $textblock) {
 
     set_post_thumbnail($post_id, $attachment_id);
 
-    if (array_key_exists('alt', $item) && $item['alt'] !== null) {
-        update_post_meta($attachment_id, '_wp_attachment_image_alt', dca_tb_clean_text($item['alt']));
+    // Metadata staat normaal ook in het MEDIA-blok. Als dat blok ontbreekt of
+    // deze attachment daar niet in voorkomt, verwerkt het featured-imageblok de
+    // metadata zelf zodat featured images zelfstandig te beheren blijven.
+    if (!dca_tb_featured_image_has_media_item($attachment_id, $textblock)) {
+        $replace_pairs = [];
+        $media_item = [
+            'attachment_id' => $attachment_id,
+            'current_url'   => $url,
+            'filename'      => $item['filename'] ?? '',
+            'new_filename'  => $item['new_filename'] ?? '',
+            'title'         => $item['title'] ?? null,
+            'alt'           => $item['alt'] ?? null,
+            'caption'       => $item['caption'] ?? null,
+            'description'   => $item['description'] ?? null,
+        ];
+        $updated = dca_tb_update_attachment_from_media_item($attachment_id, $media_item, $replace_pairs, 'featured-image-import');
+        if (is_wp_error($updated)) {
+            return $updated;
+        }
+        if (!empty($replace_pairs) && !DCA_TB_IMPORT_DRY_RUN) {
+            dca_tb_replace_media_urls_on_page($post_id, $replace_pairs);
+        }
     }
 
     return true;
@@ -734,71 +785,126 @@ function dca_tb_media_end_markers() {
     return $markers;
 }
 
-function dca_tb_collect_media_ids_from_value($value, &$ids) {
+function dca_tb_register_media_ref(&$refs, $attachment_id, $source) {
+    $attachment_id = absint($attachment_id);
+    $source = trim(dca_tb_clean_text((string) $source));
+
+    if (!$attachment_id || get_post_type($attachment_id) !== 'attachment' || !wp_attachment_is_image($attachment_id)) {
+        return;
+    }
+
+    if (!isset($refs[$attachment_id])) {
+        $refs[$attachment_id] = [
+            'id'      => $attachment_id,
+            'sources' => [],
+        ];
+    }
+
+    if ($source !== '' && !in_array($source, $refs[$attachment_id]['sources'], true)) {
+        $refs[$attachment_id]['sources'][] = $source;
+    }
+}
+
+function dca_tb_collect_media_refs_from_value($value, &$refs, $source, $depth = 0) {
+    if ($depth > 15) {
+        return;
+    }
+
     if (is_numeric($value)) {
-        $id = absint($value);
-        if ($id && get_post_type($id) === 'attachment' && wp_attachment_is_image($id)) {
-            $ids[$id] = $id;
+        dca_tb_register_media_ref($refs, absint($value), $source);
+        return;
+    }
+
+    if (is_string($value)) {
+        $value = trim($value);
+        if ($value !== '' && preg_match('#^https?://#i', $value)) {
+            $id = function_exists('attachment_url_to_postid') ? absint(attachment_url_to_postid(esc_url_raw($value))) : 0;
+            dca_tb_register_media_ref($refs, $id, $source);
         }
         return;
     }
 
-    if (is_array($value)) {
-        if (!empty($value['ID'])) {
-            dca_tb_collect_media_ids_from_value($value['ID'], $ids);
+    if (!is_array($value)) {
+        return;
+    }
+
+    foreach (['ID', 'id', 'attachment_id', 'image_id'] as $key) {
+        if (isset($value[$key])) {
+            dca_tb_collect_media_refs_from_value($value[$key], $refs, $source, $depth + 1);
         }
-        if (!empty($value['id'])) {
-            dca_tb_collect_media_ids_from_value($value['id'], $ids);
+    }
+
+    foreach (['url', 'src'] as $key) {
+        if (!empty($value[$key]) && is_string($value[$key])) {
+            dca_tb_collect_media_refs_from_value($value[$key], $refs, $source, $depth + 1);
         }
-        if (!empty($value['url'])) {
-            $id = attachment_url_to_postid((string) $value['url']);
-            dca_tb_collect_media_ids_from_value($id, $ids);
+    }
+
+    foreach ($value as $key => $child) {
+        $child_source = $source;
+        if (is_string($key) && $key !== '') {
+            $safe_key = sanitize_key($key);
+            if ($safe_key !== '' && !in_array($safe_key, ['id', 'ID', 'url', 'src'], true)) {
+                $child_source .= ' > ' . $safe_key;
+            }
         }
-        foreach ($value as $child) {
-            dca_tb_collect_media_ids_from_value($child, $ids);
-        }
+        dca_tb_collect_media_refs_from_value($child, $refs, $child_source, $depth + 1);
     }
 }
 
-function dca_tb_collect_media_ids($post_id) {
+function dca_tb_collect_media_refs($post_id) {
     $post_id = absint($post_id);
-    $ids = [];
+    $refs = [];
 
     $thumb_id = get_post_thumbnail_id($post_id);
-    if ($thumb_id && wp_attachment_is_image($thumb_id)) {
-        $ids[$thumb_id] = $thumb_id;
+    if ($thumb_id) {
+        dca_tb_register_media_ref($refs, $thumb_id, 'featured_image');
     }
 
     $post = get_post($post_id);
     if ($post && !empty($post->post_content)) {
         if (preg_match_all('/wp-image-([0-9]+)/i', $post->post_content, $m)) {
             foreach ($m[1] as $id) {
-                dca_tb_collect_media_ids_from_value($id, $ids);
+                dca_tb_collect_media_refs_from_value($id, $refs, 'post_content');
             }
         }
         if (preg_match_all('/<img[^>]+src=["\']([^"\']+)["\']/i', $post->post_content, $m)) {
             foreach ($m[1] as $url) {
-                dca_tb_collect_media_ids_from_value(attachment_url_to_postid($url), $ids);
+                dca_tb_collect_media_refs_from_value($url, $refs, 'post_content');
             }
         }
     }
 
     /**
-     * ACF media: use detected unformatted field values instead of get_fields()
-     * with formatted arrays. This keeps the export tied to fields that actually
-     * belong to the edited object and avoids pulling unrelated theme/global
-     * images into the MEDIA block.
+     * ACF media: only walk fields ACF currently detects for this object. This
+     * keeps old/deleted field data out of export and covers nested image values
+     * in group, repeater and flexible_content structures.
      */
     if (function_exists('get_field_objects')) {
         foreach (dca_tb_get_detected_acf_fields($post_id) as $field) {
             $type = isset($field['type']) ? sanitize_key($field['type']) : '';
-            if (in_array($type, ['image', 'file', 'gallery'], true)) {
-                dca_tb_collect_media_ids_from_value($field['value'] ?? '', $ids);
+            if (!in_array($type, ['image', 'file', 'gallery', 'group', 'repeater', 'flexible_content'], true)) {
+                continue;
             }
+            $field_name = isset($field['name']) ? sanitize_key($field['name']) : '';
+            $source = $field_name !== '' ? 'acf:' . $field_name : 'acf';
+            dca_tb_collect_media_refs_from_value($field['value'] ?? '', $refs, $source);
         }
     }
 
-    return array_values($ids);
+    return $refs;
+}
+
+function dca_tb_collect_media_ids_from_value($value, &$ids) {
+    $refs = [];
+    dca_tb_collect_media_refs_from_value($value, $refs, 'legacy');
+    foreach ($refs as $id => $ref) {
+        $ids[$id] = $id;
+    }
+}
+
+function dca_tb_collect_media_ids($post_id) {
+    return array_values(array_map('absint', array_keys(dca_tb_collect_media_refs($post_id))));
 }
 
 function dca_tb_media_filename($attachment_id) {
@@ -807,7 +913,8 @@ function dca_tb_media_filename($attachment_id) {
 }
 
 function dca_tb_build_media_block($post_id) {
-    $ids = dca_tb_collect_media_ids($post_id);
+    $refs = dca_tb_collect_media_refs($post_id);
+    $ids = array_values(array_map('absint', array_keys($refs)));
     $total_ids = count($ids);
 
     if ($total_ids > DCA_TB_MAX_MEDIA_PER_PAGE) {
@@ -834,6 +941,10 @@ function dca_tb_build_media_block($post_id) {
             continue;
         }
 
+        $sources = isset($refs[$attachment_id]['sources']) && is_array($refs[$attachment_id]['sources'])
+            ? implode(', ', array_map('dca_tb_clean_text', $refs[$attachment_id]['sources']))
+            : '';
+
         array_push(
             $out,
             '',
@@ -842,6 +953,8 @@ function dca_tb_build_media_block($post_id) {
             (string) $attachment_id,
             'Huidige URL:',
             (string) wp_get_attachment_url($attachment_id),
+            'Bron:',
+            $sources,
             'Bestandsnaam:',
             dca_tb_media_filename($attachment_id),
             'Nieuwe bestandsnaam:',
@@ -919,6 +1032,7 @@ function dca_tb_parse_media_blocks($textblock) {
     }
 
     $items = [];
+    $seen = [];
     $pattern = '/^AFBEELDING\s+\d+\s*$\n?(.*?)(?=^AFBEELDING\s+\d+\s*$|\z)/ims';
     if (!preg_match_all($pattern, $media, $matches, PREG_SET_ORDER)) {
         return [];
@@ -926,9 +1040,18 @@ function dca_tb_parse_media_blocks($textblock) {
 
     foreach ($matches as $m) {
         $block = trim($m[1]);
+        $attachment_id = absint(dca_tb_label($block, 'Attachment ID:', ['Huidige URL:']));
+        if ($attachment_id && isset($seen[$attachment_id])) {
+            continue;
+        }
+        if ($attachment_id) {
+            $seen[$attachment_id] = true;
+        }
+
         $items[] = [
-            'attachment_id' => absint(dca_tb_label($block, 'Attachment ID:', ['Huidige URL:'])),
-            'current_url'   => dca_tb_label($block, 'Huidige URL:', ['Bestandsnaam:']),
+            'attachment_id' => $attachment_id,
+            'current_url'   => dca_tb_label($block, 'Huidige URL:', ['Bron:', 'Bestandsnaam:']),
+            'source'        => dca_tb_label($block, 'Bron:', ['Bestandsnaam:']),
             'filename'      => dca_tb_label($block, 'Bestandsnaam:', ['Nieuwe bestandsnaam:']),
             'new_filename'  => dca_tb_label($block, 'Nieuwe bestandsnaam:', ['Title:']),
             'title'         => dca_tb_label($block, 'Title:', ['Alt text:']),
@@ -1269,6 +1392,65 @@ function dca_tb_preview_media_changes($textblock) {
     return $summary;
 }
 
+function dca_tb_update_attachment_from_media_item($attachment_id, $item, &$replace_pairs, $source = 'media-import', $skip_file_rename = false) {
+    $attachment_id = absint($attachment_id);
+
+    if (!$attachment_id || get_post_type($attachment_id) !== 'attachment' || !wp_attachment_is_image($attachment_id)) {
+        return new WP_Error('dca_media_invalid_attachment', 'Attachment ontbreekt of is geen afbeelding.');
+    }
+
+    $identity = dca_tb_media_identity_error($item, $attachment_id);
+    if (is_wp_error($identity)) {
+        return $identity;
+    }
+
+    if (!current_user_can('edit_post', $attachment_id)) {
+        return new WP_Error('dca_media_no_permission', 'Geen rechten voor attachment #' . $attachment_id . '.');
+    }
+
+    if (!DCA_TB_IMPORT_DRY_RUN) {
+        dca_tb_add_media_backup($attachment_id, $source);
+    }
+
+    $renamed = false;
+    if (!$skip_file_rename) {
+        $rename = dca_tb_rename_attachment_file($attachment_id, (string) ($item['new_filename'] ?? ''), $replace_pairs);
+        if (is_wp_error($rename)) {
+            return $rename;
+        }
+        $renamed = !empty($rename['renamed']);
+    }
+
+    $post_update = ['ID' => $attachment_id];
+    if (($item['title'] ?? null) !== null) {
+        $post_update['post_title'] = dca_tb_clean_text($item['title']);
+    }
+    if (($item['caption'] ?? null) !== null) {
+        $post_update['post_excerpt'] = dca_tb_clean_text($item['caption']);
+    }
+    if (($item['description'] ?? null) !== null) {
+        $post_update['post_content'] = dca_tb_clean_html($item['description']);
+    }
+
+    if (!DCA_TB_IMPORT_DRY_RUN) {
+        if (count($post_update) > 1) {
+            $updated = wp_update_post($post_update, true);
+            if (is_wp_error($updated)) {
+                return $updated;
+            }
+        }
+
+        if (($item['alt'] ?? null) !== null) {
+            update_post_meta($attachment_id, '_wp_attachment_image_alt', dca_tb_clean_text($item['alt']));
+        }
+    }
+
+    return [
+        'updated' => true,
+        'renamed' => $renamed,
+    ];
+}
+
 function dca_tb_save_media_items($post_id, $textblock) {
     $items = dca_tb_parse_media_blocks($textblock);
     $result = [
@@ -1290,9 +1472,6 @@ function dca_tb_save_media_items($post_id, $textblock) {
     }
 
     $replace_pairs = [];
-
-    $linked_ids = dca_tb_collect_media_ids($post_id);
-
     foreach ($items as $item) {
         $id = absint($item['attachment_id'] ?? 0);
 
@@ -1302,62 +1481,19 @@ function dca_tb_save_media_items($post_id, $textblock) {
             continue;
         }
 
-        $identity = dca_tb_media_identity_error($item, $id);
-        if (is_wp_error($identity)) {
+        // Media-items in dit blok zijn juist de lokale gekoppelde attachments. Metadata
+        // mag altijd worden bijgewerkt; bestandsnaam wijzigen blijft apart beschermd door
+        // DCA_TB_ALLOW_MEDIA_FILE_RENAME en de extensie/bestandscontroles.
+        $updated = dca_tb_update_attachment_from_media_item($id, $item, $replace_pairs, 'media-import', false);
+        if (is_wp_error($updated)) {
             $result['media_errors']++;
-            $result['messages'][] = 'Media overgeslagen voor attachment #' . $id . ': ' . $identity->get_error_message();
+            $result['messages'][] = 'Media overgeslagen voor attachment #' . $id . ': ' . $updated->get_error_message();
             continue;
         }
 
-        if (!current_user_can('edit_post', $id)) {
-            $result['media_errors']++;
-            $result['messages'][] = 'Media overgeslagen: geen rechten voor attachment #' . $id . '.';
-            continue;
-        }
-
-        if (!DCA_TB_OVERWRITE_EXISTING_MEDIA && isset($linked_ids[$id])) {
-            $result['messages'][] = 'Media overgeslagen voor attachment #' . $id . ': deze media is al gekoppeld aan dit item.';
-            continue;
-        }
-
-        if (!DCA_TB_IMPORT_DRY_RUN) {
-            dca_tb_add_media_backup($id, 'media-import');
-        }
-
-        $rename = dca_tb_rename_attachment_file($id, (string) ($item['new_filename'] ?? ''), $replace_pairs);
-        if (is_wp_error($rename)) {
-            $result['media_errors']++;
-            $result['messages'][] = 'Bestandsnaam niet gewijzigd voor attachment #' . $id . ': ' . $rename->get_error_message();
-        } elseif (!empty($rename['renamed'])) {
+        if (!empty($updated['renamed'])) {
             $result['renamed']++;
         }
-
-        $post_update = ['ID' => $id];
-        if ($item['title'] !== null) {
-            $post_update['post_title'] = dca_tb_clean_text($item['title']);
-        }
-        if ($item['caption'] !== null) {
-            $post_update['post_excerpt'] = dca_tb_clean_text($item['caption']);
-        }
-        if ($item['description'] !== null) {
-            $post_update['post_content'] = dca_tb_clean_html($item['description']);
-        }
-
-        if (!DCA_TB_IMPORT_DRY_RUN) {
-            if (count($post_update) > 1) {
-                $updated = wp_update_post($post_update, true);
-                if (is_wp_error($updated)) {
-                    $result['media_errors']++;
-                    $result['messages'][] = 'Media velden niet opgeslagen voor attachment #' . $id . ': ' . $updated->get_error_message();
-                    continue;
-                }
-            }
-
-            if ($item['alt'] !== null) {
-                update_post_meta($id, '_wp_attachment_image_alt', dca_tb_clean_text($item['alt']));
-            }
-        }
-
         $result['media_updated']++;
     }
 
@@ -1366,339 +1502,6 @@ function dca_tb_save_media_items($post_id, $textblock) {
     }
 
     return $result;
-}
-
-
-function dca_tb_acf_export_end_markers() {
-    return ['YOAST SEO', 'SAMENVATTING', 'UITGELICHTE AFBEELDING', 'MEDIA'];
-}
-
-function dca_tb_acf_attachment_id_from_value($value) {
-    if (is_numeric($value)) {
-        return absint($value);
-    }
-
-    if (is_array($value)) {
-        foreach (['ID', 'id'] as $key) {
-            if (isset($value[$key]) && is_numeric($value[$key])) {
-                return absint($value[$key]);
-            }
-        }
-    }
-
-    return 0;
-}
-
-function dca_tb_acf_attachment_to_text($value) {
-    $attachment_id = dca_tb_acf_attachment_id_from_value($value);
-
-    if (!$attachment_id && is_string($value) && function_exists('attachment_url_to_postid')) {
-        $attachment_id = absint(attachment_url_to_postid(esc_url_raw($value)));
-    }
-
-    if (!$attachment_id) {
-        return "Geen afbeelding/bestand geselecteerd.\nAttachment ID:\n0";
-    }
-
-    $url = '';
-    if (is_string($value) && preg_match('#^https?://#i', $value)) {
-        $url = esc_url_raw($value);
-    } elseif (is_array($value) && !empty($value['url'])) {
-        $url = esc_url_raw($value['url']);
-    } else {
-        $url = wp_get_attachment_url($attachment_id);
-    }
-
-    $out = [
-        'Attachment ID:',
-        (string) $attachment_id,
-        '',
-        'URL:',
-        $url ? $url : '',
-    ];
-
-    if (wp_attachment_is_image($attachment_id)) {
-        $out[] = '';
-        $out[] = 'Alt text:';
-        $out[] = dca_tb_text(get_post_meta($attachment_id, '_wp_attachment_image_alt', true));
-    }
-
-    return rtrim(implode("\n", $out));
-}
-
-function dca_tb_acf_gallery_to_text($value) {
-    if (!is_array($value)) {
-        return '';
-    }
-
-    $ids = [];
-
-    foreach ($value as $item) {
-        $id = dca_tb_acf_attachment_id_from_value($item);
-        if ($id) {
-            $ids[] = $id;
-        }
-    }
-
-    if (!$ids) {
-        return "Geen afbeeldingen geselecteerd.\nAttachment IDs:\n";
-    }
-
-    return "Attachment IDs:\n" . implode(', ', array_map('absint', array_unique($ids)));
-}
-
-function dca_tb_acf_value_to_text($value, $type = '') {
-    $type = sanitize_key($type);
-
-    if (in_array($type, ['image', 'file'], true)) {
-        return dca_tb_acf_attachment_to_text($value);
-    }
-
-    if ($type === 'gallery') {
-        return dca_tb_acf_gallery_to_text($value);
-    }
-
-    if (is_array($value) || is_object($value)) {
-        $json = wp_json_encode($value, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
-        return $json ? $json : '';
-    }
-
-    if (is_bool($value)) {
-        return $value ? '1' : '0';
-    }
-
-    return dca_tb_text($value);
-}
-
-function dca_tb_get_detected_acf_fields($post_id) {
-    $post_id = absint($post_id);
-
-    if (!$post_id || !function_exists('get_field_objects')) {
-        return [];
-    }
-
-    $objects = get_field_objects($post_id, false, false);
-
-    if (!is_array($objects)) {
-        $objects = get_field_objects($post_id, false, true);
-    }
-
-    if (!is_array($objects)) {
-        return [];
-    }
-
-    $fields = [];
-
-    foreach ($objects as $field) {
-        if (!is_array($field)) {
-            continue;
-        }
-
-        $name = isset($field['name']) ? sanitize_key($field['name']) : '';
-        $key = isset($field['key']) ? sanitize_key($field['key']) : '';
-
-        if ($name === '') {
-            continue;
-        }
-
-        $fields[] = [
-            'name'  => $name,
-            'key'   => $key,
-            'label' => isset($field['label']) ? dca_tb_clean_text($field['label']) : $name,
-            'type'  => isset($field['type']) ? sanitize_key($field['type']) : '',
-            'value' => $field['value'] ?? '',
-        ];
-    }
-
-    return $fields;
-}
-
-function dca_tb_build_acf_fields_block($post_id) {
-    $fields = dca_tb_get_detected_acf_fields($post_id);
-    $out = ['ACF VELDEN'];
-
-    if (empty($fields)) {
-        $out[] = '';
-        $out[] = 'Geen ACF-velden gedetecteerd voor deze pagina.';
-        return implode("\n", $out);
-    }
-
-    foreach ($fields as $field) {
-        $out[] = '';
-        $out[] = '--- ACF VELD ---';
-        $out[] = 'Naam: ' . $field['name'];
-        $out[] = 'Label: ' . $field['label'];
-        $out[] = 'Key: ' . $field['key'];
-        $out[] = 'Type: ' . $field['type'];
-        $out[] = 'Waarde:';
-        $out[] = dca_tb_acf_value_to_text($field['value'], $field['type']);
-        $out[] = '--- EINDE ACF VELD ---';
-    }
-
-    return trim(implode("\n", $out));
-}
-
-function dca_tb_parse_acf_fields_block($textblock) {
-    $section = dca_tb_section($textblock, 'ACF VELDEN', dca_tb_acf_export_end_markers());
-
-    if ($section === null) {
-        return null;
-    }
-
-    preg_match_all('/^--- ACF VELD ---\s*\n(.*?)^--- EINDE ACF VELD ---\s*$/ims', $section, $matches);
-    $items = [];
-
-    foreach ($matches[1] as $raw) {
-        $name = dca_tb_label($raw, 'Naam:', ['Label:', 'Key:', 'Type:', 'Waarde:']);
-        $label = dca_tb_label($raw, 'Label:', ['Key:', 'Type:', 'Waarde:']);
-        $key = dca_tb_label($raw, 'Key:', ['Type:', 'Waarde:']);
-        $type = dca_tb_label($raw, 'Type:', ['Waarde:']);
-        $value = dca_tb_label($raw, 'Waarde:');
-
-        $name = sanitize_key((string) $name);
-        $key = sanitize_key((string) $key);
-
-        if ($name === '') {
-            continue;
-        }
-
-        $items[] = [
-            'name'  => $name,
-            'label' => dca_tb_clean_text((string) $label),
-            'key'   => $key,
-            'type'  => sanitize_key((string) $type),
-            'value' => $value === null ? '' : $value,
-        ];
-    }
-
-    return $items;
-}
-
-function dca_tb_clean_acf_import_value($value, $type) {
-    $value = trim((string) $value);
-    $type = sanitize_key($type);
-
-    if (in_array($type, ['image', 'file'], true)) {
-        $attachment_id = absint(dca_tb_label($value, 'Attachment ID:', ['URL:', 'Alt text:', 'Title:', 'Caption:', 'Description:']));
-
-        if (!$attachment_id && is_numeric($value)) {
-            $attachment_id = absint($value);
-        }
-
-        if (!$attachment_id) {
-            $url = dca_tb_label($value, 'URL:', ['Alt text:', 'Title:', 'Caption:', 'Description:']);
-            if ($url && function_exists('attachment_url_to_postid')) {
-                $attachment_id = absint(attachment_url_to_postid(esc_url_raw($url)));
-            }
-        }
-
-        return $attachment_id;
-    }
-
-    if ($type === 'gallery') {
-        preg_match_all('/\d+/', $value, $matches);
-        return array_values(array_unique(array_map('absint', $matches[0] ?? [])));
-    }
-
-    if ($value !== '' && in_array(substr($value, 0, 1), ['{', '['], true)) {
-        $decoded = json_decode($value, true);
-        if (json_last_error() === JSON_ERROR_NONE) {
-            return $decoded;
-        }
-    }
-
-    if (in_array($type, ['wysiwyg', 'textarea', 'oembed'], true)) {
-        return dca_tb_clean_html($value);
-    }
-
-    if (in_array($type, ['number', 'range'], true)) {
-        return is_numeric($value) ? $value + 0 : '';
-    }
-
-    if (in_array($type, ['true_false'], true)) {
-        return in_array(strtolower($value), ['1', 'true', 'ja', 'yes', 'on'], true) ? 1 : 0;
-    }
-
-    return dca_tb_clean_text($value);
-}
-
-function dca_tb_validate_dynamic_acf_textblock($textblock) {
-    if (dca_tb_marker_count($textblock, 'ACF VELDEN') !== 1) {
-        return new WP_Error('dca_invalid_acf_fields', 'Opslaan gestopt: de kop "ACF VELDEN" ontbreekt of komt meerdere keren voor.');
-    }
-
-    foreach (['YOAST SEO', 'MEDIA', 'SAMENVATTING', 'UITGELICHTE AFBEELDING'] as $marker) {
-        if (dca_tb_marker_count($textblock, $marker) > 1) {
-            return new WP_Error('dca_duplicate_marker', 'Opslaan gestopt: de kop "' . $marker . '" komt meerdere keren voor.');
-        }
-    }
-
-    $featured_validation = dca_tb_validate_featured_image_block($textblock);
-    if (is_wp_error($featured_validation)) {
-        return $featured_validation;
-    }
-
-    $fields = dca_tb_parse_acf_fields_block($textblock);
-
-    if (!is_array($fields)) {
-        return new WP_Error('dca_invalid_acf_fields', 'Opslaan gestopt: ACF VELDEN kon niet exact gelezen worden.');
-    }
-
-    return true;
-}
-
-function dca_tb_save_dynamic_acf_fields($post_id, $textblock) {
-    $items = dca_tb_parse_acf_fields_block($textblock);
-
-    if (!is_array($items)) {
-        return new WP_Error('dca_invalid_acf_fields', 'Opslaan gestopt: ACF VELDEN kon niet exact gelezen worden.');
-    }
-
-    $detected = dca_tb_get_detected_acf_fields($post_id);
-    $by_name = [];
-    $by_key = [];
-
-    foreach ($detected as $field) {
-        $by_name[$field['name']] = $field;
-        if (!empty($field['key'])) {
-            $by_key[$field['key']] = $field;
-        }
-    }
-
-    foreach ($items as $item) {
-        $field = null;
-
-        if (!empty($item['key']) && isset($by_key[$item['key']])) {
-            $field = $by_key[$item['key']];
-        } elseif (isset($by_name[$item['name']])) {
-            $field = $by_name[$item['name']];
-        }
-
-        if (!$field) {
-            continue;
-        }
-
-        $value = dca_tb_clean_acf_import_value($item['value'], $field['type']);
-        $selector = !empty($field['key']) ? $field['key'] : $field['name'];
-
-        if (!DCA_TB_OVERWRITE_EXISTING_MEDIA && in_array($field['type'], ['image', 'file', 'gallery'], true)) {
-            $current_value = function_exists('get_field') ? get_field($selector, $post_id, false) : null;
-            if (!empty($current_value)) {
-                continue;
-            }
-        }
-
-        if (!DCA_TB_OVERWRITE_EXISTING_TEXT && dca_tb_is_text_like_acf_type($field['type'])) {
-            $current_value = function_exists('get_field') ? get_field($selector, $post_id, false) : get_post_meta($post_id, $field['name'], true);
-            if (dca_tb_has_existing_content_value($current_value)) {
-                continue;
-            }
-        }
-
-        update_field($selector, $value, $post_id);
-    }
-
-    return true;
 }
 
 function dca_tb_build_textblock($post_id) {
@@ -2151,14 +1954,60 @@ function dca_tb_import_label_to_post_type($label) {
     return 'page';
 }
 
-function dca_tb_resolve_page($page_id, $url, $title, $expected_post_type = '') {
+function dca_tb_find_post_by_url_path($url, array $allowed_post_types) {
+    $source_path = dca_tb_normalize_compare_url_path($url);
+
+    if ($source_path === '') {
+        return 0;
+    }
+
+    $per_page = 100;
+    $max_candidates = absint(apply_filters('dca_tb_url_resolve_max_candidates', 1000));
+    $checked = 0;
+    $paged = 1;
+
+    do {
+        $q = new WP_Query([
+            'post_type'              => $allowed_post_types,
+            'post_status'            => 'any',
+            'posts_per_page'         => $per_page,
+            'paged'                  => $paged,
+            'fields'                 => 'ids',
+            'no_found_rows'          => true,
+            'orderby'                => 'ID',
+            'order'                  => 'ASC',
+            'update_post_meta_cache' => false,
+            'update_post_term_cache' => false,
+        ]);
+
+        $posts = (array) $q->posts;
+
+        foreach ($posts as $candidate_id) {
+            $checked++;
+
+            if (dca_tb_normalize_compare_url_path(get_permalink($candidate_id)) === $source_path) {
+                return absint($candidate_id);
+            }
+
+            if ($max_candidates > 0 && $checked >= $max_candidates) {
+                return 0;
+            }
+        }
+
+        $paged++;
+    } while (count($posts) === $per_page);
+
+    return 0;
+}
+
+function dca_tb_resolve_page_details($page_id, $url, $title, $expected_post_type = '') {
     $page_id = absint($page_id);
     $url = trim((string) $url);
     $title = trim((string) $title);
     $expected_post_type = sanitize_key($expected_post_type);
 
     if ($expected_post_type !== '' && !dca_tb_is_supported_post_type($expected_post_type)) {
-        return 0;
+        return ['id' => 0, 'method' => 'invalid-post-type'];
     }
 
     $allowed_post_types = $expected_post_type !== '' ? [$expected_post_type] : dca_tb_supported_post_types();
@@ -2171,7 +2020,7 @@ function dca_tb_resolve_page($page_id, $url, $title, $expected_post_type = '') {
         $title_matches = dca_tb_title_matches_post($title, $page_id);
 
         if (($url === '' && $title === '') || $url_matches || $title_matches) {
-            return $page_id;
+            return ['id' => $page_id, 'method' => 'id'];
         }
     }
 
@@ -2179,44 +2028,51 @@ function dca_tb_resolve_page($page_id, $url, $title, $expected_post_type = '') {
         $url_id = url_to_postid($url);
 
         if ($url_id && ($post = get_post($url_id)) && in_array($post->post_type, $allowed_post_types, true)) {
-            return absint($url_id);
+            return ['id' => absint($url_id), 'method' => 'url'];
         }
 
-        $source_path = dca_tb_normalize_compare_url_path($url);
+        $path_id = dca_tb_find_post_by_url_path($url, $allowed_post_types);
 
-        if ($source_path !== '') {
-            $q = new WP_Query([
-                'post_type'      => $allowed_post_types,
-                'post_status'    => 'any',
-                'posts_per_page' => 20,
-                'fields'         => 'ids',
-                'no_found_rows'  => true,
-            ]);
-
-            foreach ((array) $q->posts as $candidate_id) {
-                if (dca_tb_normalize_compare_url_path(get_permalink($candidate_id)) === $source_path) {
-                    return absint($candidate_id);
-                }
-            }
+        if ($path_id) {
+            return ['id' => $path_id, 'method' => 'url-path'];
         }
     }
 
     if ($title !== '') {
         $q = new WP_Query([
-            'post_type'      => $allowed_post_types,
-            'post_status'    => 'any',
-            'title'          => $title,
-            'posts_per_page' => 2,
-            'fields'         => 'ids',
-            'no_found_rows'  => true,
+            'post_type'              => $allowed_post_types,
+            'post_status'            => 'any',
+            'title'                  => $title,
+            'posts_per_page'         => 2,
+            'fields'                 => 'ids',
+            'no_found_rows'          => true,
+            'update_post_meta_cache' => false,
+            'update_post_term_cache' => false,
         ]);
 
         if (count((array) $q->posts) === 1 && !empty($q->posts[0])) {
-            return absint($q->posts[0]);
+            return ['id' => absint($q->posts[0]), 'method' => 'title'];
         }
     }
 
-    return 0;
+    return ['id' => 0, 'method' => 'none'];
+}
+
+function dca_tb_resolve_page($page_id, $url, $title, $expected_post_type = '') {
+    $details = dca_tb_resolve_page_details($page_id, $url, $title, $expected_post_type);
+
+    return absint($details['id'] ?? 0);
+}
+
+function dca_tb_resolve_method_label($method) {
+    $labels = [
+        'id'       => 'ID-match',
+        'url'      => 'URL-match',
+        'url-path' => 'URL-pad-match',
+        'title'    => 'titel-match',
+    ];
+
+    return $labels[$method] ?? '';
 }
 
 function dca_tb_validate_import_size($txt) {
@@ -2292,7 +2148,9 @@ function dca_tb_bulk_preview($txt) {
     $preview = [];
 
     foreach ($items as $i => $item) {
-        $target = dca_tb_resolve_page($item['source_id'], $item['source_url'], $item['source_title'], $item['source_type'] ?? '');
+        $target_details = dca_tb_resolve_page_details($item['source_id'], $item['source_url'], $item['source_title'], $item['source_type'] ?? '');
+        $target = absint($target_details['id'] ?? 0);
+        $target_method = dca_tb_resolve_method_label($target_details['method'] ?? '');
         $status = 'error';
         $message = '';
         $media = dca_tb_preview_media_changes($item['textblock']);
@@ -2318,7 +2176,7 @@ function dca_tb_bulk_preview($txt) {
                     $message = 'Overgeslagen: ' . $validation->get_error_message();
                 } else {
                     $status = $media['errors'] > 0 ? 'partial' : 'success';
-                    $message = 'Klaar om op te slaan. Media: ' . absint($media['found']) . ' gevonden, ' . absint($media['renames']) . ' bestandsnamen te hernoemen';
+                    $message = 'Klaar om op te slaan' . ($target_method ? ' via ' . $target_method : '') . '. Media: ' . absint($media['found']) . ' gevonden, ' . absint($media['renames']) . ' bestandsnamen te hernoemen';
                     if ($media['errors'] > 0) {
                         $message .= ', ' . absint($media['errors']) . ' mediafout(en). Tekst wordt wel geïmporteerd.';
                     }
@@ -2364,7 +2222,9 @@ function dca_tb_bulk_save($txt) {
     $results  = [];
 
     foreach ($items as $i => $item) {
-        $target = dca_tb_resolve_page($item['source_id'], $item['source_url'], $item['source_title'], $item['source_type'] ?? '');
+        $target_details = dca_tb_resolve_page_details($item['source_id'], $item['source_url'], $item['source_title'], $item['source_type'] ?? '');
+        $target = absint($target_details['id'] ?? 0);
+        $target_method = dca_tb_resolve_method_label($target_details['method'] ?? '');
         $title  = $item['source_title'] ?: 'Blok ' . ($i + 1);
 
         if (!$target) {
@@ -2455,7 +2315,7 @@ function dca_tb_bulk_save($txt) {
 
         $imported++;
         $status = $media_result['media_errors'] > 0 ? 'partial' : 'success';
-        $message = (DCA_TB_IMPORT_DRY_RUN ? 'Dry-run: zou importeren. ' : 'Geïmporteerd. ') . 'Media bijgewerkt: ' . absint($media_result['media_updated']) . ', bestandsnamen hernoemd: ' . absint($media_result['renamed']) . ', URL-vervangingen: ' . absint($media_result['url_replaces']) . '.';
+        $message = (DCA_TB_IMPORT_DRY_RUN ? 'Dry-run: zou importeren. ' : 'Geïmporteerd. ') . ($target_method ? 'Match: ' . $target_method . '. ' : '') . 'Media bijgewerkt: ' . absint($media_result['media_updated']) . ', bestandsnamen hernoemd: ' . absint($media_result['renamed']) . ', URL-vervangingen: ' . absint($media_result['url_replaces']) . '.';
         if ($media_result['media_errors'] > 0) {
             $message .= ' Mediafouten: ' . absint($media_result['media_errors']) . '. ' . implode(' ', array_slice($media_result['messages'], 0, 3));
         }
@@ -2674,7 +2534,17 @@ function dca_tb_can_edit_post($post_id) {
 }
 
 function dca_tb_current_user_can_use_manager() {
-    return current_user_can('edit_posts') || current_user_can('edit_pages') || current_user_can('edit_products');
+    /**
+     * Filters the capability required to use the Content Sync Manager.
+     *
+     * Defaults to manage_options because the plugin can bulk overwrite content,
+     * SEO metadata and media metadata. Agencies can relax this deliberately per site.
+     *
+     * @param string $capability Required capability.
+     */
+    $capability = apply_filters('dca_tb_manager_capability', 'manage_options');
+
+    return is_string($capability) && $capability !== '' && current_user_can($capability);
 }
 
 function dca_tb_require_manager_access() {
@@ -2955,7 +2825,7 @@ add_action('admin_footer-edit.php', function () {
     
 
     $html = <<<'HTML'
-    <div class="dca-modal" id="dca-single-modal">
+    <div class="dca-modal" id="dca-single-modal" role="dialog" aria-modal="true" aria-labelledby="dca-single-title" aria-hidden="true">
             <div class="dca-box">
                 <div class="dca-head">
                     <h2 id="dca-single-title">Content Sync</h2>
@@ -2974,10 +2844,10 @@ add_action('admin_footer-edit.php', function () {
             </div>
         </div>
     
-        <div class="dca-modal" id="dca-bulk-modal">
+        <div class="dca-modal" id="dca-bulk-modal" role="dialog" aria-modal="true" aria-labelledby="dca-bulk-title" aria-hidden="true">
             <div class="dca-box">
                 <div class="dca-head">
-                    <h2>Bulkeditor</h2>
+                    <h2 id="dca-bulk-title">Bulkeditor</h2>
                     <button type="button" class="button dca-close-bulk">Sluiten</button>
                 </div>
                 <div class="dca-content">
@@ -2994,10 +2864,10 @@ add_action('admin_footer-edit.php', function () {
             </div>
         </div>
     
-        <div class="dca-modal" id="dca-import-modal">
+        <div class="dca-modal" id="dca-import-modal" role="dialog" aria-modal="true" aria-labelledby="dca-import-title" aria-hidden="true">
             <div class="dca-box">
                 <div class="dca-head">
-                    <h2>TXT importeren</h2>
+                    <h2 id="dca-import-title">TXT importeren</h2>
                     <button type="button" class="button dca-close-import">Sluiten</button>
                 </div>
                 <div class="dca-content">

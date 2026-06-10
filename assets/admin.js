@@ -58,11 +58,12 @@ document.addEventListener('DOMContentLoaded',function(){
                 return;
             }
     
-            let currentPostId=null, singleFilename='content-sync.txt', bulkFilename='content-sync.txt', importTxt='', importOk=false, cache={}, singleInitial='', bulkInitial='', bulkChecked=false, toastTimer=null;
+            let currentPostId=null, singleFilename='content-sync.txt', bulkFilename='content-sync.txt', importTxt='', importOk=false, cache={}, singleInitial='', bulkInitial='', bulkChecked=false, toastTimer=null, lastFocusedBeforeModal=null;
     
             function showToast(msg){toast.textContent=msg;toast.classList.add('is-active');clearTimeout(toastTimer);toastTimer=setTimeout(()=>toast.classList.remove('is-active'),3500)}
-            function open(m){m.classList.add('is-active')}
-            function close(m){m.classList.remove('is-active')}
+            function focusable(modal){return Array.from(modal.querySelectorAll('a[href],button:not([disabled]),textarea:not([disabled]),input:not([disabled]),select:not([disabled]),[tabindex]:not([tabindex="-1"])')).filter(el=>el.offsetParent!==null)}
+            function open(m){lastFocusedBeforeModal=document.activeElement;m.classList.add('is-active');m.setAttribute('aria-hidden','false');const els=focusable(m);if(els.length){setTimeout(()=>els[0].focus(),0)}}
+            function close(m){m.classList.remove('is-active');m.setAttribute('aria-hidden','true');if(lastFocusedBeforeModal&&typeof lastFocusedBeforeModal.focus==='function'){lastFocusedBeforeModal.focus()}lastFocusedBeforeModal=null}
             function status(el,msg,type){el.textContent=msg||'';el.classList.remove('is-success','is-error');if(type)el.classList.add(type)}
             function dirty(type){return type==='single'&&singleOut.value!==singleInitial||type==='bulk'&&bulkOut.value!==bulkInitial}
             function closeSafe(modal,type){if(dirty(type)&&!confirm('Je hebt wijzigingen die nog niet zijn opgeslagen. Toch sluiten?'))return;close(modal)}
@@ -447,10 +448,20 @@ document.addEventListener('DOMContentLoaded',function(){
             }));
     
             document.addEventListener('keydown',e=>{
+                const activeModal = [singleModal,bulkModal,importModal].find(m=>m.classList.contains('is-active'));
+
                 if(e.key==='Escape'){
                     if(singleModal.classList.contains('is-active'))closeSafe(singleModal,'single');
-                    if(bulkModal.classList.contains('is-active'))closeSafe(bulkModal,'bulk');
-                    if(importModal.classList.contains('is-active'))close(importModal);
+                    else if(bulkModal.classList.contains('is-active'))closeSafe(bulkModal,'bulk');
+                    else if(importModal.classList.contains('is-active'))close(importModal);
+                }
+
+                if(e.key==='Tab'&&activeModal){
+                    const els=focusable(activeModal);
+                    if(!els.length)return;
+                    const first=els[0], last=els[els.length-1];
+                    if(e.shiftKey&&document.activeElement===first){e.preventDefault();last.focus()}
+                    else if(!e.shiftKey&&document.activeElement===last){e.preventDefault();first.focus()}
                 }
             });
     
