@@ -1,14 +1,15 @@
 <?php
 /**
- * Uninstall cleanup for Content Sync Manager.
+ * Uninstall cleanup for SooCool for WooCommerce.
  *
- * Keeps per-post and per-attachment backup metadata intentionally, because it can
- * be needed to roll back imported content/media after plugin removal. Only the
- * global import log option is removed.
- *
- * @package ContentSyncManager
+ * @package SooCool\WooCommerce
  */
 
-defined('WP_UNINSTALL_PLUGIN') || exit;
+declare(strict_types=1);
 
-delete_option('_dca_tb_last_import_log');
+if ( ! defined( 'WP_UNINSTALL_PLUGIN' ) ) {
+	exit;
+}
+
+delete_option( 'soocool_settings' );
+delete_option( 'soocool_logs' );

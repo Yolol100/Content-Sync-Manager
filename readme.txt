@@ -1,102 +1,154 @@
-=== Content Sync Manager ===
+=== SooCool for WooCommerce ===
 Contributors: webactueel
-Tags: admin, acf, yoast, import
-Requires at least: 6.2
-Tested up to: 6.2
-Requires PHP: 7.4
-Stable tag: 1.2.23
+Tags: woocommerce, shipping, logistics, transport, orders
+Requires at least: 6.5
+Tested up to: 7.0
+Requires PHP: 8.1
+Stable tag: 0.3.41
+Requires Plugins: woocommerce
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
-Admin-only TXT import/export voor gedetecteerde ACF-velden, Yoast SEO en media-metadata.
+Connect WooCommerce orders with the SooCool transport API.
 
 == Description ==
 
-Deze plugin draait alleen in de WordPress-admin en voert geen externe tracking, externe asset-loading of externe API-calls uit.
+SooCool for WooCommerce lets authorized WooCommerce shop managers submit WooCommerce orders to the SooCool transport API, create pickup and delivery tasks, and download SooCool shipping labels from the WooCommerce order screen.
 
-Deze private plugin voegt een compacte admin bulkeditor toe voor pagina's, berichten en producten. De plugin is bedoeld voor gecontroleerde staging-imports en detecteert bestaande ACF-velden per pagina/product en werkt met Yoast meta en lokale WordPress-afbeeldingen.
+The plugin is intended for stores that use SooCool for transport and delivery operations. It does not send order data until the plugin is configured and an authorized shop manager manually submits an order, or automatic submission is explicitly enabled in the plugin settings.
+
+Main features:
+
+* WordPress admin settings screen under SooCool.
+* SooCool API connection test using the documented `/ping` endpoint.
+* Manual WooCommerce order action to submit an order to SooCool.
+* Optional automatic order submission when an order reaches a configured WooCommerce status.
+* Pickup plus delivery task support for collection workflows.
+* Fixed delivery window of `08:00-18:00` for delivery tasks.
+* Configurable pickup address and pickup time window.
+* WooCommerce HPOS compatible order metadata handling.
+* A6 and Collated A4 SooCool shipping label downloads.
+* Sanitized activity logs and masked API key handling.
+
+= External service: SooCool API =
+
+This plugin connects to the SooCool API when an authorized shop manager tests the connection, submits an order, updates/cancels a SooCool order, or downloads a shipping label.
+
+Official API hosts used by the plugin:
+
+* Staging: `https://api.staging.soocool.nl`
+* Production: `https://api.soocool.nl`
+
+The plugin sends the configured API key in the `X-API-Key` header. The API key is not intentionally exposed in the WordPress admin UI, REST responses, frontend markup or logs.
+
+Data sent to SooCool can include WooCommerce order reference, billing/shipping name, address, country, email address, phone number, pickup address, package/goods description, pickup and delivery dates, pickup time window and the fixed delivery time window.
+
+Data is sent only for configured SooCool actions. No tracking, advertising or unrelated external assets are loaded by this plugin.
+
+Please review SooCool's own service terms, data processing terms and privacy information before using the integration in production.
+
+= Source and build notes =
+
+This release package contains the runtime PHP source, built admin assets and documentation needed to install the plugin. The admin JavaScript and CSS in `assets/build` are human-readable release assets.
+
+For WordPress.org submission, the development source repository and build tooling should be made publicly available or included with the submitted package, so reviewers can reproduce the built assets.
 
 == Installation ==
 
-1. Zet oude Code Snippets/WPCode-versies uit.
-2. Upload de pluginmap of ZIP via WordPress.
-3. Activeer de plugin op staging.
-4. Test eerst export, preview en daarna import.
+1. Install and activate WooCommerce.
+2. Upload and activate this plugin.
+3. Open the SooCool settings screen in the WordPress admin.
+4. Choose the Test environment first.
+5. Enter the SooCool API key or define `SOOCOOL_API_KEY` in `wp-config.php`.
+6. Fill in the pickup address and pickup time window.
+7. Save settings and run Test connection.
+8. Create a WooCommerce test order and manually submit it to SooCool.
+9. Confirm the order in the SooCool test portal before enabling automatic submission.
+
+== Frequently Asked Questions ==
+
+= Does the plugin send data automatically? =
+
+Not until the integration is configured and either an authorized shop manager manually submits an order or automatic submission is enabled.
+
+= Where should I store the API key? =
+
+You can store it in the plugin settings. For stricter environments, define it in `wp-config.php`:
+
+`define( 'SOOCOOL_API_KEY', 'your-soocool-api-key' );`
+
+When the constant exists, it takes precedence over the saved database value.
+
+= Does the plugin support WooCommerce HPOS? =
+
+Yes. The plugin declares WooCommerce custom order table compatibility and uses WooCommerce order APIs instead of direct order postmeta queries.
+
+= Which label formats are supported? =
+
+The plugin supports the SooCool order-level shipping label formats `a6` and `collated_a4`.
+
+== Privacy ==
+
+This plugin sends WooCommerce order, address, contact and package data to the SooCool API only when needed for configured transport operations. The plugin stores SooCool sync metadata on the WooCommerce order and stores sanitized activity logs in WordPress options.
+
+The plugin does not load third-party JavaScript or CSS in the frontend, does not add tracking pixels, and does not intentionally send data to unrelated third-party services.
+
+Site owners are responsible for disclosing the use of SooCool as a transport service in their own privacy policy where applicable.
+
+== Uninstall ==
+
+Removing the plugin deletes the `soocool_settings` and `soocool_logs` options. WooCommerce order meta such as SooCool order IDs, references, sync status and last errors is intentionally retained for historical order and audit continuity.
 
 == Changelog ==
 
-= 1.2.23 =
-* Featured-imageblok uitgebreid met bestandsnaam, nieuwe bestandsnaam, title, alt, caption en description.
-* MEDIA-blok toont nu de bron per afbeelding, zoals featured_image, post_content of acf:veldnaam.
-* ACF-media-detectie loopt nu recursief door image, file, gallery, group, repeater en flexible_content velden die ACF op dat moment detecteert.
-* Media-metadata-update gecentraliseerd zodat title, alt, caption en description consistent worden opgeslagen.
+= 0.3.41 =
+* Consolidated duplicate readme changelog and upgrade-notice entries.
+* Bumped release metadata to 0.3.41 with no API, WooCommerce, HPOS, order sync, label or settings behavior changes.
 
-= 1.2.21 =
-* Na import, bulk opslaan of single save blijft de adminlijst op dezelfde filterstand staan.
-* Automatische redirect naar Contentblok: nog te doen vandaag verwijderd.
+= 0.3.40 =
+* Show HTTP 200 `/ping` responses as a normal successful connection toast, even when the response body differs from the documented sample.
+* Keep the non-sample ping body as internal/debug context only.
 
-= 1.2.20 =
-* Packaging: pluginbestanden staan nu in de map `content-sync-manager` voor voorspelbaarder overschrijven bij upload.
-* Cache-busting: pluginversie verhoogd zodat aangepaste admin-JavaScript niet door browsercache blijft hangen.
+= 0.3.39 =
+* Moved settings save/API-key status feedback out of inline page notices and into toast notifications only.
 
-= 1.2.12 =
-* Grote gerichte bugfix-release voor admin-functies die stil konden falen.
-* Toolbar-opbouw robuuster gemaakt als bestaande markup of conflicterende toolbar aanwezig is.
-* Bulk/import-preview blokkeert opslaan als de AJAX-response geen geldige items bevat.
-* ACF image/file/gallery-export gebruikt echte enters in plaats van letterlijke \n-tekst.
-* ACF-detectie gebruikt nu primair onbewerkte waarden, met fallback naar geformatteerde waarden.
-* Resolver voorkomt foutieve titelmatch bij lege titel en blijft backwards-compatible voor ID-only imports.
+= 0.3.38 =
+* Reject masked, redacted or corrupt API key values before sending requests to SooCool.
+* Add safe API-key diagnostics: source, status, length, first/last four characters, host and header name.
+* Show clear admin notices for saved, missing or invalid/masked API key state.
 
-= 1.2.6 =
-* Beperkt admin-UI en filters tot berichten, pagina’s en producten.
-* Producten toegevoegd aan import/export.
-* Standaardtemplate-filter sluit Elementor Canvas en Elementor Full Width uit.
-* Importlogrechten afgestemd op de managerrechten.
+= 0.3.36 =
+* Added orderReference preflight lookup before POST /order to prevent duplicate SooCool orders.
+* Added client support for good-specific and multiple order label endpoints.
+* Added safe SooCool test portal link in test mode without storing portal credentials in the plugin.
+* Clarified that pickup flows send both pickup and delivery tasks.
+* Normalized outgoing address, contact and goods fields before API submission.
+* Kept authenticated HTTP 200 `/ping` responses successful while surfacing contract warnings for non-sample bodies.
 
-= 1.2.4 =
-* Extra lijstfilter toegevoegd voor standaard/ACF-pagina's zonder Elementor-builderdata.
+= 0.3.32 =
+* Set plugin author to Webactueel and packaged the release under the correct `soocool-for-woocommerce` slug.
+* Fixed WordPress.org/Plugin Check release hygiene issues, including version metadata, textdomain packaging, production markdown exclusions and i18n template generation.
+* Hardened public API error handling, log scrubbing and `/ping` contract validation.
+* Added WordPress.org-style `readme.txt`.
+* Added explicit external service and privacy disclosure.
+* Added source/build route notes for public submission readiness.
+* Clarified what customer/order data can be sent to the SooCool API.
 
-= 1.2.3 =
-* Verbetering: ACF image/file-velden worden compact en leesbaar geëxporteerd met Attachment ID, URL, alt, titel, caption en description in plaats van volledige ACF image-arrays.
-* Verbetering: ACF gallery-velden worden importvriendelijk geëxporteerd als attachment-ID-lijst.
-* Fix: import van ACF image/file-velden accepteert de nieuwe nette layout en schrijft het attachment-ID terug naar ACF.
+= 0.3.31 =
+* Improved connection-test UI messaging and API error extraction.
+* Preserved HTTP 200 `/ping` as successful while surfacing contract warnings separately.
+* Added settings validation for pickup/delivery date offsets and pickup time-window order.
 
-= 1.0.8 =
-* Extra 10/10-releasecheck uitgevoerd op foutpaden, admin-toegang en WordPress.org/Plugin Check-aandachtspunten.
-* Uitgelichte-afbeelding-sectie wordt nu strikt gevalideerd voordat thumbnail of alt-tekst wordt gewijzigd.
-* Admin-modal markup wordt alleen nog geladen voor gebruikers die de manager mogen gebruiken.
+== Upgrade Notice ==
 
-= 1.0.7 =
-* Diepere release-check uitgevoerd op WordPress.org-richtlijnen, Plugin Check-aandachtspunten, security-boundaries en rollbackgedrag.
-* Single-item opslaan verwerkt nu ook media-metadata en media-bestandsnaamwijzigingen.
-* Media-rollback hernoemt het fysieke uploadbestand veilig terug wanneer het vorige pad beschikbaar is.
-* Uitgelichte-afbeelding-alt wordt alleen aangepast wanneer het Alt text-label aanwezig is.
-* Externe Update URI-header verwijderd om WordPress.org-releasehygiëne minder ambigu te maken.
+= 0.3.41 =
+Release metadata cleanup only. Re-test the SooCool staging API, HPOS order sync, duplicate orderReference handling and label downloads before production use.
 
-= 1.0.6 =
-* Release-check uitgevoerd op syntax, pakketinhoud, admin AJAX-beveiliging en WordPress.org/GitHub-richtlijnen.
-* Meta URL-vervanging bij media-hernoemen robuuster gemaakt voor geserialiseerde meta.
-* Media-export begrensd op dezelfde limiet als import zodat export/import consistenter blijft.
-* Uitgelichte-afbeelding-alt kan nu ook bewust worden leeggemaakt.
-* Dubbele interne statusregel verwijderd en LICENSE-bestand toegevoegd.
+= 0.3.40 =
+Connection tests now show a simple success message for authenticated HTTP 200 `/ping` responses.
 
-= 1.0.5 =
-* Samenvatting toegevoegd aan TXT-export/import voor berichten en pagina’s.
-* Uitgelichte afbeelding expliciet toegevoegd aan TXT-export/import via Attachment ID of URL.
+= 0.3.38 =
+Re-save the SooCool API key after upgrading if the connection test previously returned a missing X-API-Key 401 error.
 
-= 1.0.4 =
-* Zelfde pluginmap en hoofdpluginbestand behouden zodat uploaden over 1.0.x de oude plugin vervangt.
-* Server-side limiet voor export/preload toegevoegd.
-* TXT-importgrootte begrensd.
-* Text domain consistent gemaakt.
-* Striktere uploads-mapcontrole bij media hernoemen.
-* Pagina-ID is leidend wanneer ID, URL en titel niet overeenkomen.
-
-= 1.0.2 =
-* Striktere pagina-resolutie op URL/titel om verkeerde ID-koppelingen te voorkomen.
-* Media-identiteitscontrole op huidige URL en bestandsnaam.
-* UTF-8 BOM-tolerantie voor TXT-import.
-* Guard tegen dubbele oude snippet/pluginfunctie.
-
-= 1.0.1 =
-* Mini-pluginstructuur met losse admin assets.
+= 0.3.36 =
+Re-test the SooCool staging API, HPOS order sync, duplicate orderReference handling and label downloads before production use.
