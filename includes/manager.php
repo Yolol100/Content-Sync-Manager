@@ -51,6 +51,10 @@ if (!defined('DCA_TB_MAX_IMPORT_BYTES')) {
     define('DCA_TB_MAX_IMPORT_BYTES', 5242880);
 }
 
+if (!defined('DCA_TB_IMPORT_PREVIEW_TTL')) {
+    define('DCA_TB_IMPORT_PREVIEW_TTL', 20 * MINUTE_IN_SECONDS);
+}
+
 if (!defined('DCA_TB_LIGHT_ADMIN_LIST')) {
     define('DCA_TB_LIGHT_ADMIN_LIST', true);
 }
@@ -2890,6 +2894,49 @@ function dca_tb_request_has_destructive_confirmation() {
     return isset($_POST['destructive_confirm']) && hash_equals('1', (string) wp_unslash($_POST['destructive_confirm']));
 }
 
+function dca_tb_import_preview_hash($txt) {
+    return hash_hmac('sha256', (string) $txt, wp_salt('nonce'));
+}
+
+function dca_tb_import_preview_transient_key($hash) {
+    return 'dca_tb_import_preview_' . get_current_user_id() . '_' . preg_replace('/[^a-f0-9]/', '', (string) $hash);
+}
+
+function dca_tb_mark_import_previewed($txt, $preview) {
+    $hash = dca_tb_import_preview_hash($txt);
+    $preview = is_array($preview) ? $preview : [];
+    $importable = 0;
+
+    foreach ($preview as $item) {
+        if (is_array($item) && in_array($item['status'] ?? '', ['success', 'partial'], true)) {
+            $importable++;
+        }
+    }
+
+    set_transient(dca_tb_import_preview_transient_key($hash), [
+        'time'       => time(),
+        'items'      => count($preview),
+        'importable' => $importable,
+    ], DCA_TB_IMPORT_PREVIEW_TTL);
+
+    return $hash;
+}
+
+function dca_tb_require_matching_import_preview($txt) {
+    $submitted_hash = isset($_POST['preview_hash']) ? sanitize_text_field(wp_unslash($_POST['preview_hash'])) : '';
+    $expected_hash = dca_tb_import_preview_hash($txt);
+
+    if ($submitted_hash === '' || !hash_equals($expected_hash, $submitted_hash)) {
+        wp_send_json_error(['message' => 'Import is geblokkeerd: controleer exact deze TXT-inhoud eerst opnieuw.'], 403);
+    }
+
+    $preview = get_transient(dca_tb_import_preview_transient_key($expected_hash));
+
+    if (!is_array($preview) || empty($preview['importable'])) {
+        wp_send_json_error(['message' => 'Import is geblokkeerd: er is geen geldige recente controle gevonden. Controleer het bestand opnieuw.'], 403);
+    }
+}
+
 function dca_tb_require_destructive_confirmation() {
     if (DCA_TB_IMPORT_DRY_RUN) {
         return;
@@ -3009,20 +3056,27 @@ add_action('wp_ajax_dca_bulk_get_acf_textblocks', function () {
 add_action('wp_ajax_dca_txt_import_preview', function () {
     dca_tb_require_ajax_access();
 
-    $preview = dca_tb_bulk_preview(isset($_POST['txt_content']) ? wp_unslash($_POST['txt_content']) : '');
+    $txt = isset($_POST['txt_content']) ? wp_unslash($_POST['txt_content']) : '';
+    $preview = dca_tb_bulk_preview($txt);
 
     if (is_wp_error($preview)) {
         wp_send_json_error(['message' => $preview->get_error_message()]);
     }
 
-    wp_send_json_success(['items' => $preview]);
+    wp_send_json_success([
+        'items'        => $preview,
+        'preview_hash' => dca_tb_mark_import_previewed($txt, $preview),
+    ]);
 });
 
 add_action('wp_ajax_dca_txt_import_run', function () {
     dca_tb_require_ajax_access();
     dca_tb_require_destructive_confirmation();
 
-    $result = dca_tb_bulk_save(isset($_POST['txt_content']) ? wp_unslash($_POST['txt_content']) : '');
+    $txt = isset($_POST['txt_content']) ? wp_unslash($_POST['txt_content']) : '';
+    dca_tb_require_matching_import_preview($txt);
+
+    $result = dca_tb_bulk_save($txt);
 
     if (is_wp_error($result)) {
         wp_send_json_error(['message' => $result->get_error_message()]);
@@ -3111,7 +3165,8 @@ function dca_tb_get_admin_asset_settings() {
         'filterUrl'   => esc_url_raw($filter_url),
         'notDoneUrl'  => esc_url_raw($not_done_url),
         'filterLabel' => $status_filter === 'not_done' ? 'Toon alles' : 'Verberg vandaag bijgewerkt',
-        'ajaxUrl'     => admin_url('admin-ajax.php'),
+        'ajaxUrl'        => admin_url('admin-ajax.php'),
+        'maxImportBytes' => DCA_TB_MAX_IMPORT_BYTES,
     ];
 }
 
@@ -3142,6 +3197,24 @@ function dca_tb_enqueue_admin_assets($hook_suffix) {
     );
 }
 add_action('admin_enqueue_scripts', 'dca_tb_enqueue_admin_assets');
+
+function dca_tb_acf_available() {
+    return function_exists('get_field_objects') && function_exists('update_field');
+}
+
+add_action('admin_notices', function () {
+    if (!dca_tb_current_user_can_use_manager() || !function_exists('get_current_screen')) {
+        return;
+    }
+
+    $screen = get_current_screen();
+
+    if (!$screen || $screen->base !== 'edit' || !in_array($screen->post_type, ['page', 'product'], true) || dca_tb_acf_available()) {
+        return;
+    }
+
+    echo '<div class="notice notice-warning"><p>' . esc_html__('Content Sync Manager: ACF is niet actief of niet volledig beschikbaar. Pagina- en productimports met ACF-velden worden geblokkeerd totdat ACF actief is. Berichtimports blijven beschikbaar.', 'content-sync-manager') . '</p></div>';
+});
 
 add_action('admin_footer-edit.php', function () {
     $screen = get_current_screen();
@@ -3203,11 +3276,11 @@ add_action('admin_footer-edit.php', function () {
                     <button type="button" class="button dca-close-import">Sluiten</button>
                 </div>
                 <div class="dca-content">
-                    <p class="dca-warning">Gebruik een TXT-bestand dat via “Exporteer als .txt” is gemaakt. Berichten, pagina’s en producten met een standaardtemplate worden verwerkt; Elementor Canvas en Elementor Full Width worden overgeslagen. Media kan alt, title, caption, description en fysieke bestandsnaam wijzigen.</p>
+                    <p class="dca-warning">Gebruik een TXT-bestand dat via “Exporteer als .txt” is gemaakt. Controleer het bestand verplicht vóór import. Berichten, pagina’s en producten met een standaardtemplate worden verwerkt; Elementor Canvas en Elementor Full Width worden overgeslagen. Import kan content, Yoast-data, ACF-data, media metadata en fysieke mediabestandsnamen wijzigen.</p>
                     <input type="file" id="dca-import-file" accept=".txt,text/plain">
                     <div class="dca-actions">
                         <button type="button" class="button" id="dca-import-preview">Controleer bestand</button>
-                        <button type="button" class="button button-primary" id="dca-import-run" disabled>Importeer en overschrijf</button>
+                        <button type="button" class="button button-primary" id="dca-import-run" disabled>Importeer gecontroleerde items</button>
                         <span class="dca-status" id="dca-import-status"></span>
                     </div>
                     <div class="dca-preview" id="dca-import-preview-box"></div>

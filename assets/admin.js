@@ -58,7 +58,7 @@ document.addEventListener('DOMContentLoaded',function(){
                 return;
             }
     
-            let currentPostId=null, singleFilename='content-sync.txt', bulkFilename='content-sync.txt', importTxt='', importOk=false, cache={}, singleInitial='', bulkInitial='', bulkChecked=false, toastTimer=null, lastFocusedBeforeModal=null;
+            let currentPostId=null, singleFilename='content-sync.txt', bulkFilename='content-sync.txt', importTxt='', importOk=false, importPreviewHash='', bulkPreviewHash='', cache={}, singleInitial='', bulkInitial='', bulkChecked=false, toastTimer=null, lastFocusedBeforeModal=null;
     
             function showToast(msg){toast.textContent=msg;toast.classList.add('is-active');clearTimeout(toastTimer);toastTimer=setTimeout(()=>toast.classList.remove('is-active'),3500)}
             function focusable(modal){return Array.from(modal.querySelectorAll('a[href],button:not([disabled]),textarea:not([disabled]),input:not([disabled]),select:not([disabled]),[tabindex]:not([tabindex="-1"])')).filter(el=>el.offsetParent!==null)}
@@ -289,7 +289,7 @@ document.addEventListener('DOMContentLoaded',function(){
                 return ajax('dca_bulk_get_acf_textblocks',{post_ids:ids});
             }
     
-            function resetBulkCheck(){bulkChecked=false;setButtonEnabled(bulkSave,false);bulkPreview.style.display='none';bulkPreview.innerHTML=''}
+            function resetBulkCheck(){bulkChecked=false;bulkPreviewHash='';setButtonEnabled(bulkSave,false);bulkPreview.style.display='none';bulkPreview.innerHTML=''}
             bulkOut.addEventListener('input',function(){resetBulkCheck();saveBulkDraft()});
     
             toolbarBulk.addEventListener('click',function(){
@@ -340,16 +340,18 @@ document.addEventListener('DOMContentLoaded',function(){
                 status(bulkStatus,'Controleren...','');
                 setButtonEnabled(bulkSave,false);
                 bulkChecked=false;
+                bulkPreviewHash='';
     
                 ajax('dca_txt_import_preview',{txt_content:bulkOut.value}).then(d=>{
                     if(!d||!d.success){bulkPreview.style.display='none';bulkPreview.innerHTML='';status(bulkStatus,d&&d.data&&d.data.message?d.data.message:'Controle mislukt.','is-error');return}
                     const items=Array.isArray(d.data&&d.data.items)?d.data.items:[];
+                    bulkPreviewHash=String((d.data&&d.data.preview_hash)||'');
                     renderPreview(bulkPreview,items);
                     if(!items.length){status(bulkStatus,'Controle gaf geen items terug. Opslaan is geblokkeerd.','is-error');return}
                     const validItems=importableItems(items).length>0;
                     const errors=items.some(i=>i.status!=='success');
-                    bulkChecked=validItems;
-                    setButtonEnabled(bulkSave,validItems);
+                    bulkChecked=validItems&&!!bulkPreviewHash;
+                    setButtonEnabled(bulkSave,bulkChecked);
                     if(errors){
                         status(bulkStatus, validItems ? 'Controle klaar: '+previewSummary(items)+' Geldige items kunnen worden opgeslagen; geblokkeerde items worden overgeslagen.' : 'Controle klaar: '+previewSummary(items)+' Er is niets om op te slaan. Bekijk de rode meldingen per item.','is-error');
                         return;
@@ -359,13 +361,13 @@ document.addEventListener('DOMContentLoaded',function(){
             });
     
             bulkSave.addEventListener('click',function(){
-                if(!bulkChecked){status(bulkStatus,'Controleer eerst de bulktekst.','is-error');return}
-                if(!confirm('Weet je zeker dat je deze bulk-tekst wilt opslaan? Geldige items worden overschreven. Items met fouten worden overgeslagen. Per geïmporteerd item wordt automatisch eerst een back-up gemaakt.'))return;
+                if(!bulkChecked||!bulkPreviewHash){status(bulkStatus,'Controleer eerst exact deze bulktekst opnieuw.','is-error');return}
+                if(!confirm('Weet je zeker dat je deze gecontroleerde bulk-tekst wilt opslaan? Geldige items kunnen bestaande content, SEO-, ACF- en media-data wijzigen. Items met fouten worden overgeslagen. Per geïmporteerd item wordt automatisch eerst een back-up gemaakt.'))return;
     
                 this.disabled=true;
                 status(bulkStatus,'Back-ups maken en bulk opslaan...','');
     
-                ajax('dca_txt_import_run',{txt_content:bulkOut.value,destructive_confirm:'1'}).then(d=>{
+                ajax('dca_txt_import_run',{txt_content:bulkOut.value,preview_hash:bulkPreviewHash,destructive_confirm:'1'}).then(d=>{
                     this.disabled=false;
                     if(!d||!d.success){status(bulkStatus,d&&d.data&&d.data.message?d.data.message:'Bulk opslaan mislukt.','is-error');return}
                     if(d.data&&d.data.items){renderPreview(bulkPreview,d.data.items)}
@@ -380,7 +382,7 @@ document.addEventListener('DOMContentLoaded',function(){
             bulkDownload.addEventListener('click',()=>{download(bulkOut.value,bulkFilename);status(bulkStatus,'TXT-bestand gedownload.','is-success')});
             bulkClose.addEventListener('click',()=>closeSafe(bulkModal,'bulk'));
     
-            toolbarImport.addEventListener('click',()=>{importTxt='';importOk=false;importFile.value='';importPreviewBox.innerHTML='';importPreviewBox.style.display='none';setButtonEnabled(importRun,false);status(importStatus,'','');open(importModal)});
+            toolbarImport.addEventListener('click',()=>{importTxt='';importOk=false;importPreviewHash='';importFile.value='';importPreviewBox.innerHTML='';importPreviewBox.style.display='none';setButtonEnabled(importRun,false);status(importStatus,'','');open(importModal)});
             importClose.addEventListener('click',()=>close(importModal));
     
             function readFile(){
@@ -388,6 +390,7 @@ document.addEventListener('DOMContentLoaded',function(){
                     const f=importFile.files&&importFile.files[0];
                     if(!f)return rej('Kies eerst een TXT-bestand.');
                     if(!f.name.toLowerCase().endsWith('.txt'))return rej('Kies een geldig .txt-bestand.');
+                    if(dcaSettings.maxImportBytes&&f.size>Number(dcaSettings.maxImportBytes))return rej('Bestand is te groot. Maximaal toegestaan: '+Math.round(Number(dcaSettings.maxImportBytes)/1024/1024)+' MB.');
                     const r=new FileReader();
                     r.onload=()=>res(String(r.result||''));
                     r.onerror=()=>rej('Bestand kon niet gelezen worden.');
@@ -398,6 +401,7 @@ document.addEventListener('DOMContentLoaded',function(){
             importPreview.addEventListener('click',function(){
                 importTxt='';
                 importOk=false;
+                importPreviewHash='';
                 importPreviewBox.innerHTML='';
                 importPreviewBox.style.display='none';
                 setButtonEnabled(importRun,false);
@@ -410,12 +414,13 @@ document.addEventListener('DOMContentLoaded',function(){
                 }).then(d=>{
                     if(!d||!d.success){importPreviewBox.style.display='none';importPreviewBox.innerHTML='';status(importStatus,d&&d.data&&d.data.message?d.data.message:'Controle mislukt.','is-error');return}
                     const items=Array.isArray(d.data&&d.data.items)?d.data.items:[];
+                    importPreviewHash=String((d.data&&d.data.preview_hash)||'');
                     renderPreview(importPreviewBox,items);
                     if(!items.length){status(importStatus,'Controle gaf geen items terug. Importeren is geblokkeerd.','is-error');return}
                     const validItems=importableItems(items).length>0;
                     const errors=items.some(i=>i.status!=='success');
-                    importOk=validItems;
-                    setButtonEnabled(importRun,validItems);
+                    importOk=validItems&&!!importPreviewHash;
+                    setButtonEnabled(importRun,importOk);
                     if(errors){
                         status(importStatus, validItems ? 'Controle klaar: '+previewSummary(items)+' Geldige items kunnen worden geïmporteerd; geblokkeerde items worden overgeslagen.' : 'Controle klaar: '+previewSummary(items)+' Er is niets om te importeren. Bekijk de rode meldingen per item.','is-error');
                         return;
@@ -425,13 +430,13 @@ document.addEventListener('DOMContentLoaded',function(){
             });
     
             importRun.addEventListener('click',function(){
-                if(!importOk||!importTxt){status(importStatus,'Controleer eerst het bestand.','is-error');return}
-                if(!confirm('Weet je zeker dat je dit TXT-bestand wilt importeren? Geldige items worden overschreven. Items met fouten worden overgeslagen. Per geïmporteerd item wordt automatisch eerst een back-up gemaakt.'))return;
+                if(!importOk||!importTxt||!importPreviewHash){status(importStatus,'Controleer eerst exact dit bestand opnieuw.','is-error');return}
+                if(!confirm('Weet je zeker dat je dit gecontroleerde TXT-bestand wilt importeren? Geldige items kunnen bestaande content, SEO-, ACF- en media-data wijzigen. Items met fouten worden overgeslagen. Per geïmporteerd item wordt automatisch eerst een back-up gemaakt.'))return;
     
                 this.disabled=true;
                 status(importStatus,'Back-ups maken en importeren...','');
     
-                ajax('dca_txt_import_run',{txt_content:importTxt,destructive_confirm:'1'}).then(d=>{
+                ajax('dca_txt_import_run',{txt_content:importTxt,preview_hash:importPreviewHash,destructive_confirm:'1'}).then(d=>{
                     if(!d||!d.success){status(importStatus,d&&d.data&&d.data.message?d.data.message:'Import mislukt.','is-error');this.disabled=false;return}
                     if(d.data&&d.data.items){renderPreview(importPreviewBox,d.data.items)}
                     status(importStatus,d.data.message||'Import voltooid.','is-success');
