@@ -3,7 +3,7 @@
  * Plugin Name: Content Sync Manager
  * Plugin URI: https://webactueel.nl/
  * Description: Admin-only TXT import/export voor gedetecteerde ACF-velden, Yoast SEO en media-metadata.
- * Version: 1.2.25
+ * Version: 1.2.26
  * Requires at least: 6.2
  * Requires PHP: 7.4
  * Author: Webactueel
@@ -29,9 +29,13 @@ if (function_exists('dca_tb_usp_fields')) {
     return;
 }
 
-define('DCA_TB_VERSION', '1.2.25');
+define('DCA_TB_VERSION', '1.2.26');
 define('DCA_TB_PLUGIN_FILE', __FILE__);
 define('DCA_TB_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('DCA_TB_PLUGIN_URL', plugin_dir_url(__FILE__));
+
+add_action('plugins_loaded', function () {
+    load_plugin_textdomain('content-sync-manager', false, dirname(plugin_basename(__FILE__)) . '/languages');
+});
 
 require_once DCA_TB_PLUGIN_DIR . 'includes/manager.php';
