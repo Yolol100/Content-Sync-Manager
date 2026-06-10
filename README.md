@@ -1,172 +1,55 @@
-# SooCool for WooCommerce
+# Content Sync Manager
 
-Built by Webactueel.
+Admin-only mini-plugin voor TXT export/import van berichten, pagina’s en producten met gedetecteerde ACF-velden, Yoast SEO velden, samenvattingen, uitgelichte afbeeldingen en media-metadata.
 
-SooCool for WooCommerce connects WooCommerce orders to the SooCool transport API.
+## Installatie
 
+1. Upload de map `content-sync-manager` naar `/wp-content/plugins/`.
+2. Activeer de plugin in WordPress.
+3. Open Pagina's, Berichten of Producten in de admin.
+4. Gebruik de SEO-toolbar onderaan het overzicht.
 
-## WordPress.org and external service disclosure
+## Veilig gebruik
 
-This plugin acts as an interface to the SooCool transport API. It can send WooCommerce order, address, contact, pickup and package data to SooCool when an authorized shop manager tests the connection, manually submits an order, downloads a label, or when automatic submission is explicitly enabled.
+- Test eerst op staging.
+- Maak vooraf een database- en uploads-back-up.
+- Gebruik altijd eerst `Controleer bestand` voordat je importeert.
+- Media hernoemen staat standaard aan via `DCA_TB_ALLOW_MEDIA_FILE_RENAME`; gebruik dit bij voorkeur eerst op staging vanwege impact op afbeeldings-URL's, cache en SEO.
 
-Official API hosts:
+## Vereisten
 
-- Staging: `https://api.staging.soocool.nl`
-- Production: `https://api.soocool.nl`
-
-The API key is sent through the `X-API-Key` header and is masked in admin responses and logs. No unrelated third-party JavaScript, CSS, tracking pixels or advertising mechanisms are loaded by the plugin. Site owners remain responsible for disclosing SooCool as a transport/logistics processor in their own privacy policy where applicable.
-
-See `PRIVACY.md` for the full privacy and external-service disclosure.
-
-## Source and build route
-
-This release package contains runtime PHP source and human-readable built admin assets. For public WordPress.org submission, publish the development repository or include the original source assets and build tooling so reviewers can reproduce `assets/build/admin.js` and `assets/build/admin.css`. See `SOURCE.md`.
-
-## Features
-
-- Prevents duplicate SooCool orders by checking `GET /order?orderReference=...` before creating a new order.
-- Supports the documented order label endpoint, good-specific label endpoint and multiple-label API in the PHP client.
-- Shows the SooCool test portal link in test mode without storing portal credentials in plugin files.
-
-- WordPress admin settings under **SooCool**.
-- SooCool API connection test via `/ping`.
-- Manual WooCommerce order action to send an order to SooCool.
-- Optional automatic order submission by WooCommerce status.
-- Pickup and delivery task support.
-- Fixed SooCool delivery window `08:00-18:00` for every delivery task.
-- SooCool order ID, reference, sync status and last error stored in WooCommerce order meta.
-- Shipping label download from the WooCommerce order screen.
-- HPOS compatible through WooCommerce custom order tables declaration.
-- Secrets are never hardcoded, never returned through REST responses and are masked in logs.
-
-## Requirements
-
-- PHP 8.1+
-- WordPress 6.5+
-- WooCommerce 8.0+
-
-## Development setup
-
-```bash
-composer install
-npm install
-npm run check:assets
-npm run build
-composer quality
-```
-
-## Security notes
-
-Do not commit API keys, portal passwords, `.env` files, production URLs with secrets, or exported logs containing customer data. Use the test environment first.
-
-## Staging checklist
-
-1. Install the plugin on staging.
-2. Activate WooCommerce and enable HPOS in WooCommerce settings.
-3. Open **SooCool**.
-4. Enter the test API base URL and API key.
-5. Fill in the pickup address completely.
-6. Save settings and run **Test connection**.
-7. Create a test WooCommerce order with shipping address.
-8. Use the order action **Send to SooCool**.
-9. Confirm SooCool order ID appears in the SooCool order box.
-10. In the SooCool test portal, confirm that pickup-enabled orders create exactly two tasks: one pickup task and one delivery task.
-11. Confirm the delivery task uses exactly `08:00-18:00`.
-12. Download both A6 and Collated A4 labels only after SooCool accepted the order.
-13. Keep automatic sync disabled until manual orders are accepted consistently.
-
-## Quality checks
-
-Run these checks before packaging a release:
-
-```bash
-composer validate --strict
-composer install
-composer lint:php
-composer phpcs
-composer phpstan
-composer test
-npm install
-# Commit package-lock.json after the first install. Use npm ci in CI once the lockfile exists.
-npm run check:assets
-npm run lint:js
-npm run lint:css
-npm run build
-```
-
-Use WooCommerce HPOS in staging and verify the manual order action, optional status hook, `/ping` connection test, pickup plus delivery task creation, fixed `08:00-18:00` delivery window and PDF label downloads before enabling production credentials.
+- WordPress 6.2+
+- PHP 7.4+
+- ACF voor pagina- en productvelden wanneer die via ACF worden beheerd
+- Yoast SEO optioneel voor SEO title/meta description
 
 
-## Release note
+## Versie
 
-This repository should commit `package-lock.json` after running `npm install` locally. Release builds should be generated locally or in CI with the committed lockfile so `assets/build` exactly matches `assets/src`.
+1.2.12
 
+## ACF-velden
 
-## Release quality gate
-
-A production release should only be marked ready after Plugin Check, PHPCS/WPCS, HPOS tests and a SooCool staging order have passed. Static code review alone is not enough to prove the external API contract.
-
-## Advanced security note: API key storage
-
-By default, the SooCool API key is stored in `wp_options` with autoload disabled. For environments where secrets should not be stored in the database, define the key in `wp-config.php` instead:
-
-```php
-define( 'SOOCOOL_API_KEY', 'your-soocool-api-key' );
-```
-
-When this constant is present, it is used instead of the saved database value. Do not expose this value in logs, screenshots or exported diagnostics.
-
-## Uninstall behavior
-
-Removing the plugin deletes the `soocool_settings` and `soocool_logs` options. WooCommerce order meta such as SooCool order IDs, references, sync status and last errors is intentionally retained for historical order/audit continuity. Export or copy required diagnostics before uninstalling.
-
-## Advanced security note: API host allow-list
-
-SooCool API base URLs are restricted to the official SooCool hosts by default:
-
-- `api.staging.soocool.nl`
-- `api.soocool.nl`
-
-Developers can allow an approved non-standard host in staging with the `soocool_allowed_api_hosts` filter. Do not use this for untrusted or user-provided hosts.
-
-```php
-add_filter('soocool_allowed_api_hosts', static function (array $hosts): array {
-    $hosts[] = 'approved-staging-api.example.test';
-    return $hosts;
-});
-```
-
-## Final release QA checklist
-
-Before production, record evidence for:
-
-- Composer quality checks.
-- npm asset contract, build and lint checks.
-- HPOS-enabled order screen test.
-- SooCool `/ping` test.
-- Pickup-enabled test order in SooCool portal.
-- Delivery task fixed at `08:00-18:00`.
-- A6 and Collated A4 shipping label downloads.
-- Safe API error handling and sanitized logs.
+Pagina-export gebruikt dynamische ACF-detectie. De plugin exporteert alleen velden die ACF op de betreffende pagina detecteert en importeert alleen velden die op de doelpagina ook door ACF bestaan. Oude vaste ACF-layouts zoals hoofdtekst/titel_1/usp_1 worden niet meer teruggeschreven.
 
 
-## SooCool API compatibility notes
+## Let op bij hernoemen
 
-This release uses the order-level shipping-label endpoint documented by SooCool:
-
-- `GET /order/{orderId}/shipping-label`
-- `output=a6` or `output=collated_a4`
-- `Accept: application/pdf`
-- `X-API-Key` authentication
-
-The stored SooCool `orderId` must be a positive numeric ID returned by the SooCool order API. Invalid or legacy non-numeric values are not used for label downloads.
-
-### OpenAPI schema coverage
-
-The plugin is aligned with the supplied SooCool OpenAPI root specification for servers, authentication, order endpoints, numeric `orderId` handling, shipping labels and `/ping`.
-The supplied root specification references external schema files including `models/order.json`, `requests/create-order.json`, `requests/update-order.json` and `responses/generic/*.json`. Those external files are not bundled in this release. Until those files are reviewed, the plugin enforces the confirmed contract minimums locally: an order reference, at least one delivery task, optional pickup before delivery, at least one good, numeric SooCool order IDs and `ping: pong` for connection tests.
+Deze versie gebruikt de nieuwe pluginmap `content-sync-manager` en het nieuwe hoofdpluginbestand `content-sync-manager.php`. Zet de oude plugin `dca-acf-tekstblok-manager` eerst uit voordat je deze versie activeert, zodat er geen dubbele managerfuncties actief zijn.
 
 
-## API key handling
+## 1.2.21
 
-The admin settings screen never reveals the saved SooCool API key. When a key is stored, the password field shows masked dots. Saving settings without replacing the field preserves the existing key.
+- Pluginbestanden verpakt in de map `content-sync-manager` voor voorspelbaarder overschrijven.
+- Versie verhoogd voor cache-busting van aangepaste admin-JavaScript.
+
+## 1.2.21
+
+- Bestaande gekoppelde media blijft standaard behouden tijdens import.
+- Nieuwe constante `DCA_TB_OVERWRITE_EXISTING_MEDIA` toegevoegd, standaard `false`.
+
+## 1.2.21
+
+- Bestaande titels, tekstvelden, samenvattingen en Yoast-teksten worden standaard niet overschreven.
+- Nieuwe constants: `DCA_TB_OVERWRITE_EXISTING_TEXT` en `DCA_TB_OVERWRITE_EXISTING_TITLE`, beide standaard `false`.
+- Import vult standaard alleen lege tekstvelden aan.
