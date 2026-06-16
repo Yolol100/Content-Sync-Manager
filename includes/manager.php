@@ -32,7 +32,7 @@ if (!defined('DCA_TB_OVERWRITE_EXISTING_MEDIA')) {
 }
 
 if (!defined('DCA_TB_OVERWRITE_EXISTING_TEXT')) {
-    define('DCA_TB_OVERWRITE_EXISTING_TEXT', false);
+    define('DCA_TB_OVERWRITE_EXISTING_TEXT', true);
 }
 
 if (!defined('DCA_TB_OVERWRITE_EXISTING_TITLE')) {
@@ -2512,7 +2512,7 @@ function dca_tb_bulk_preview($txt) {
                     $message = 'Overgeslagen: ' . $validation->get_error_message();
                 } else {
                     $status = $media['errors'] > 0 ? 'partial' : 'success';
-                    $message = 'Klaar om op te slaan' . ($target_method ? ' via ' . $target_method : '') . '. Media: ' . absint($media['found']) . ' gevonden, ' . absint($media['renames']) . ' bestandsnamen te hernoemen';
+                    $message = 'Klaar om op te slaan' . ($target_method ? ' via ' . $target_method : '') . '. Tekst, samenvatting en Yoast worden overschreven. Media: ' . absint($media['found']) . ' gevonden, ' . absint($media['renames']) . ' bestandsnamen te hernoemen';
                     if ($media['errors'] > 0) {
                         $message .= ', ' . absint($media['errors']) . ' mediafout(en). Tekst wordt wel geïmporteerd.';
                     }
