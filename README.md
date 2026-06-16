@@ -50,9 +50,13 @@ Zet oude Code Snippets/WPCode-versies of oude pluginvarianten eerst uit voordat 
 
 ## Versie
 
-1.2.26
+1.2.33
 
 ## Changelog
+
+## 1.2.33
+- ACF-detectie werkt nu via actieve veldgroepen per pagina/product en is niet gekoppeld aan vaste veldnamen.
+- Export haalt waarden op via veldkey en import matcht eerst op veldkey, daarna op veldnaam.
 
 ### 1.2.26
 
@@ -66,3 +70,17 @@ Zet oude Code Snippets/WPCode-versies of oude pluginvarianten eerst uit voordat 
 ### 1.2.25
 
 - Media-bestandsnaam wijzigen staat standaard aan via `DCA_TB_ALLOW_MEDIA_FILE_RENAME`.
+
+
+## 1.2.28 hotfix
+
+Lege ACF-tekstwaarden uit een TXT-export worden niet meer als overschrijfwaarde opgeslagen. Dit voorkomt dat bestaande ACF-teksten leeg raken wanneer alleen samenvattingen zijn aangepast. De toolbar bevat daarnaast een herstelactie voor de laatste import op basis van automatische back-ups.
+
+
+## 1.2.32
+
+- Fix: ACF-export gebruikt weer geladen veldwaarden, zodat tekstvelden, titels, minititels en FAQ-velden niet leeg in de TXT-export komen.
+- Lege importwaarden blijven beschermd en overschrijven bestaande tekst niet.
+
+## 1.2.31
+- Admin filterbalk opnieuw opgebouwd zodat paginering niet over filters valt.

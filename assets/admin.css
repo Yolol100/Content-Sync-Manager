@@ -1,5 +1,5 @@
 body.wp-admin.edit-php.post-type-page,
-            body.wp-admin.edit-php.post-type-post{padding-bottom:86px}
+            body.wp-admin.edit-php.post-type-post{padding-bottom:68px}
             .column-dca_acf_textblock{width:200px}.dca-open-acf-textblock{white-space:nowrap}
             .dca-badge{display:inline-block;margin-top:6px;padding:2px 7px;border-radius:999px;font-size:11px;line-height:1.5;font-weight:600;white-space:nowrap}
             .dca-badge-updated{background:#e8f0fe;color:#135e96}
@@ -17,18 +17,19 @@ body.wp-admin.edit-php.post-type-page,
                 display:flex;
                 flex-direction:row;
                 align-items:center;
-                flex-wrap:wrap;
+                flex-wrap:nowrap;
                 justify-content:center;
                 gap:6px;
-                width:auto;
-                max-width:min(860px,calc(100vw - 48px));
+                width:max-content;
+                max-width:min(1180px,calc(100vw - 48px));
                 padding:8px 10px;
                 background:#fff;
                 border:1px solid #c3c4c7;
                 border-radius:7px;
                 box-shadow:0 8px 28px rgba(0,0,0,.18);
-                overflow:visible;
-                white-space:normal;
+                overflow-x:auto;
+                overflow-y:visible;
+                white-space:nowrap;
             }
     
             .dca-toolbar-title{flex:0 0 auto;font-weight:600;white-space:nowrap;margin-right:2px}
@@ -87,6 +88,7 @@ body.wp-admin.edit-php.post-type-page,
                     flex-wrap:wrap;
                     justify-content:center;
                     overflow:visible;
+                    white-space:normal;
                 }
     
                 .dca-toolbar .button{width:auto;text-align:center}
@@ -102,118 +104,168 @@ body.wp-admin.edit-php.post-type-page,
             }
 
 
-/* Keep WordPress list-table filters compact on desktop.
-   The admin already has WP date, Yoast and readability filters; wide CSM labels can otherwise
-   make the overview wider than the viewport. */
-@media(min-width: 783px){
-    body.wp-admin.edit-php .tablenav.top{
-        display:flex;
-        align-items:center;
-        flex-wrap:nowrap;
-        gap:6px;
+@media(min-width:783px){
+    body.wp-admin.edit-php.post-type-page .tablenav.top,
+    body.wp-admin.edit-php.post-type-post .tablenav.top{
+        display:grid;
+        grid-template-columns:minmax(0,1fr) max-content;
+        grid-auto-rows:auto;
+        align-items:start;
+        gap:8px 18px;
         height:auto;
-        min-height:40px;
-        max-width:100%;
-        overflow:hidden;
+        min-height:0;
+        margin:12px 0 10px;
+        overflow:visible;
     }
 
-    body.wp-admin.edit-php .tablenav.top .alignleft.actions{
+    body.wp-admin.edit-php.post-type-page .tablenav.top::after,
+    body.wp-admin.edit-php.post-type-post .tablenav.top::after{
+        content:none;
+        display:none;
+        clear:none;
+    }
+
+    body.wp-admin.edit-php.post-type-page .tablenav.top .alignleft.actions,
+    body.wp-admin.edit-php.post-type-post .tablenav.top .alignleft.actions{
+        float:none;
+        grid-column:1;
+        display:flex;
+        align-items:center;
+        flex-wrap:wrap;
+        gap:8px;
+        min-width:0;
+        margin:0;
+        padding:0;
+        overflow:visible;
+    }
+
+    body.wp-admin.edit-php.post-type-page .tablenav.top .bulkactions,
+    body.wp-admin.edit-php.post-type-post .tablenav.top .bulkactions{
         display:flex;
         align-items:center;
         flex-wrap:nowrap;
-        gap:6px;
-        min-width:0;
-        max-width:100%;
-        margin-right:0;
-    }
-
-    body.wp-admin.edit-php .tablenav.top .bulkactions{
-        flex:0 0 auto;
-        display:flex;
-        align-items:center;
-        gap:6px;
-        min-width:0;
-    }
-
-    body.wp-admin.edit-php .tablenav.top select,
-    body.wp-admin.edit-php .tablenav.top input[type="submit"],
-    body.wp-admin.edit-php .tablenav.top .button{
+        gap:8px;
         margin:0;
+        padding:0;
         min-width:0;
-        max-width:100%;
     }
 
-    body.wp-admin.edit-php .tablenav.top select{
-        width:140px;
-        max-width:140px;
-        text-overflow:ellipsis;
-        white-space:nowrap;
-        overflow:hidden;
+    body.wp-admin.edit-php.post-type-page .tablenav.top select,
+    body.wp-admin.edit-php.post-type-post .tablenav.top select,
+    body.wp-admin.edit-php.post-type-page .tablenav.top input[type="submit"],
+    body.wp-admin.edit-php.post-type-post .tablenav.top input[type="submit"]{
+        margin:0;
+        vertical-align:middle;
     }
 
     body.wp-admin.edit-php .tablenav.top #bulk-action-selector-top{
-        width:130px;
-        max-width:130px;
+        width:190px;
+        max-width:190px;
     }
 
     body.wp-admin.edit-php .tablenav.top select[name="m"]{
-        width:130px;
-        max-width:130px;
+        width:148px;
+        max-width:148px;
     }
 
     body.wp-admin.edit-php .tablenav.top #dca-tb-status-filter{
-        width:185px;
-        max-width:185px;
+        width:176px;
+        max-width:176px;
     }
 
     body.wp-admin.edit-php .tablenav.top #dca-tb-template-filter{
-        width:170px;
-        max-width:170px;
+        width:168px;
+        max-width:168px;
     }
 
     body.wp-admin.edit-php .tablenav.top select[name="seo_filter"],
-    body.wp-admin.edit-php .tablenav.top select[name="readability_filter"],
-    body.wp-admin.edit-php .tablenav.top select[id*="wpseo"],
+    body.wp-admin.edit-php .tablenav.top select[id*="wpseo_filter"],
     body.wp-admin.edit-php .tablenav.top select[id*="yoast"]{
-        width:145px;
-        max-width:145px;
+        width:172px;
+        max-width:172px;
     }
 
-    body.wp-admin.edit-php .tablenav.top input[type="submit"]{
-        flex:0 0 auto;
-        width:auto;
-        padding-left:10px;
-        padding-right:10px;
+    body.wp-admin.edit-php .tablenav.top select[name="readability_filter"],
+    body.wp-admin.edit-php .tablenav.top select[id*="readability"]{
+        width:182px;
+        max-width:182px;
+    }
+
+    body.wp-admin.edit-php.post-type-page .tablenav.top .tablenav-pages,
+    body.wp-admin.edit-php.post-type-post .tablenav.top .tablenav-pages{
+        float:none;
+        grid-column:2;
+        grid-row:1 / span 2;
+        justify-self:end;
+        align-self:start;
+        display:flex;
+        align-items:center;
+        justify-content:flex-end;
+        gap:8px;
+        margin:0;
+        padding:0;
+        white-space:nowrap;
+        min-width:285px;
+    }
+
+    body.wp-admin.edit-php .tablenav.top .tablenav-pages .displaying-num{
+        display:inline-block;
+        margin:0 4px 0 0;
+        white-space:nowrap;
+    }
+
+    body.wp-admin.edit-php .tablenav.top .tablenav-pages .pagination-links{
+        display:inline-flex;
+        align-items:center;
+        gap:4px;
+        white-space:nowrap;
+    }
+
+    body.wp-admin.edit-php .tablenav.top .tablenav-pages .button,
+    body.wp-admin.edit-php .tablenav.top .tablenav-pages .tablenav-pages-navspan{
+        display:inline-flex;
+        align-items:center;
+        justify-content:center;
+        width:32px;
+        min-width:32px;
+        height:32px;
+        padding:0;
+        margin:0;
+        box-sizing:border-box;
+        line-height:1;
+    }
+
+    body.wp-admin.edit-php .tablenav.top .tablenav-pages .current-page{
+        width:70px;
+        min-width:70px;
+        height:32px;
+        margin:0 2px;
+        text-align:center;
     }
 }
 
-@media(min-width: 783px) and (max-width: 1280px){
-    body.wp-admin.edit-php .tablenav.top select{
-        width:125px;
-        max-width:125px;
+@media(min-width:783px) and (max-width:1500px){
+    body.wp-admin.edit-php.post-type-page .tablenav.top,
+    body.wp-admin.edit-php.post-type-post .tablenav.top{
+        grid-template-columns:1fr;
     }
 
-    body.wp-admin.edit-php .tablenav.top #bulk-action-selector-top,
-    body.wp-admin.edit-php .tablenav.top select[name="m"]{
-        width:120px;
-        max-width:120px;
+    body.wp-admin.edit-php.post-type-page .tablenav.top .tablenav-pages,
+    body.wp-admin.edit-php.post-type-post .tablenav.top .tablenav-pages{
+        grid-column:1;
+        grid-row:auto;
+        justify-self:end;
+        min-width:0;
+        margin-top:2px;
     }
+}
 
-    body.wp-admin.edit-php .tablenav.top #dca-tb-status-filter{
-        width:160px;
-        max-width:160px;
-    }
-
-    body.wp-admin.edit-php .tablenav.top #dca-tb-template-filter{
-        width:150px;
-        max-width:150px;
-    }
-
-    body.wp-admin.edit-php .tablenav.top select[name="seo_filter"],
-    body.wp-admin.edit-php .tablenav.top select[name="readability_filter"],
-    body.wp-admin.edit-php .tablenav.top select[id*="wpseo"],
-    body.wp-admin.edit-php .tablenav.top select[id*="yoast"]{
-        width:125px;
-        max-width:125px;
+@media(max-width:782px){
+    body.wp-admin.edit-php.post-type-page .tablenav.top .alignleft.actions,
+    body.wp-admin.edit-php.post-type-post .tablenav.top .alignleft.actions{
+        display:flex;
+        flex-wrap:wrap;
+        gap:6px;
+        height:auto;
     }
 }

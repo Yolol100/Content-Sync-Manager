@@ -11,7 +11,7 @@ document.addEventListener('DOMContentLoaded',function(){
             function ensureToolbar(){
                 if(!nonce)return;
                 const existing=document.querySelector('.dca-toolbar');
-                if(existing && document.querySelector('#dca-copy-selected') && document.querySelector('#dca-open-empty-bulk') && document.querySelector('#dca-export-selected') && document.querySelector('#dca-deselect-selected') && document.querySelector('#dca-open-import')){
+                if(existing && document.querySelector('#dca-copy-selected') && document.querySelector('#dca-open-empty-bulk') && document.querySelector('#dca-export-selected') && document.querySelector('#dca-deselect-selected') && document.querySelector('#dca-open-import') && document.querySelector('#dca-restore-last-import')){
                     return;
                 }
                 const bar=document.createElement('div');
@@ -25,7 +25,8 @@ document.addEventListener('DOMContentLoaded',function(){
                     ['dca-open-empty-bulk','Bulkeditor','button'],
                     ['dca-export-selected','Export .txt','button'],
                     ['dca-deselect-selected','Deselecteer alles','button'],
-                    ['dca-open-import','Import .txt','button button-primary']
+                    ['dca-open-import','Import .txt','button button-primary'],
+                    ['dca-restore-last-import','Herstel laatste import','button']
                 ].forEach(item=>{
                     const btn=document.createElement('button');
                     btn.type='button';
@@ -51,8 +52,8 @@ document.addEventListener('DOMContentLoaded',function(){
             const singleSave=$('#dca-single-save'), singleCopy=$('#dca-single-copy'), singleDownload=$('#dca-single-download'), singleClose=$('.dca-close-single');
             const bulkCheck=$('#dca-bulk-check'), bulkCopy=$('#dca-bulk-copy'), bulkDownload=$('#dca-bulk-download'), bulkClose=$('.dca-close-bulk');
             const importPreview=$('#dca-import-preview'), importClose=$('.dca-close-import');
-            const toolbarCopy=$('#dca-copy-selected'), toolbarBulk=$('#dca-open-empty-bulk'), toolbarExport=$('#dca-export-selected'), toolbarDeselect=$('#dca-deselect-selected'), toolbarImport=$('#dca-open-import');
-            const requiredEls=[toast,singleModal,singleOut,singleTitle,singleStatus,singleView,singleSave,singleCopy,singleDownload,singleClose,bulkModal,bulkOut,bulkStatus,bulkPreview,bulkSave,bulkCheck,bulkCopy,bulkDownload,bulkClose,importModal,importFile,importStatus,importPreviewBox,importRun,importPreview,importClose,toolbarCopy,toolbarBulk,toolbarExport,toolbarDeselect,toolbarImport];
+            const toolbarCopy=$('#dca-copy-selected'), toolbarBulk=$('#dca-open-empty-bulk'), toolbarExport=$('#dca-export-selected'), toolbarDeselect=$('#dca-deselect-selected'), toolbarImport=$('#dca-open-import'), toolbarRestore=$('#dca-restore-last-import');
+            const requiredEls=[toast,singleModal,singleOut,singleTitle,singleStatus,singleView,singleSave,singleCopy,singleDownload,singleClose,bulkModal,bulkOut,bulkStatus,bulkPreview,bulkSave,bulkCheck,bulkCopy,bulkDownload,bulkClose,importModal,importFile,importStatus,importPreviewBox,importRun,importPreview,importClose,toolbarCopy,toolbarBulk,toolbarExport,toolbarDeselect,toolbarImport,toolbarRestore];
             if(!nonce||!ajaxUrl||requiredEls.some(el=>!el)){
                 console.warn('Content Sync Manager: admin UI niet volledig geladen. Herlaad de adminpagina.');
                 return;
@@ -383,6 +384,16 @@ document.addEventListener('DOMContentLoaded',function(){
             bulkClose.addEventListener('click',()=>closeSafe(bulkModal,'bulk'));
     
             toolbarImport.addEventListener('click',()=>{importTxt='';importOk=false;importPreviewHash='';importFile.value='';importPreviewBox.innerHTML='';importPreviewBox.style.display='none';setButtonEnabled(importRun,false);status(importStatus,'','');open(importModal)});
+            toolbarRestore.addEventListener('click',function(){
+                if(!confirm('Weet je zeker dat je de laatste import wilt terugzetten vanuit de automatische pagina-back-ups? Gebruik dit alleen direct na een foutieve import.'))return;
+                this.disabled=true;
+                showToast('Laatste import wordt hersteld...');
+                ajax('dca_restore_last_import_pages',{destructive_confirm:'1'}).then(d=>{
+                    this.disabled=false;
+                    if(!d||!d.success){showToast(d&&d.data&&d.data.message?d.data.message:'Herstellen mislukt.');return}
+                    reloadList(d.data&&d.data.message?d.data.message:'Laatste import hersteld');
+                }).catch(()=>{this.disabled=false;showToast('Herstellen mislukt.')});
+            });
             importClose.addEventListener('click',()=>close(importModal));
     
             function readFile(){

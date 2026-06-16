@@ -4,7 +4,7 @@ Tags: admin, acf, yoast, import
 Requires at least: 6.2
 Tested up to: 6.2
 Requires PHP: 7.4
-Stable tag: 1.2.27
+Stable tag: 1.2.34
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -24,6 +24,23 @@ Deze private plugin voegt een compacte admin bulkeditor toe voor pagina's, beric
 4. Test eerst export, preview en daarna import.
 
 == Changelog ==
+
+= 1.2.34 =
+* Verbetering: ACF-export detecteert velden nu dynamisch via de actieve ACF-veldgroepen van de pagina of het product, niet via vaste veldnamen.
+* Verbetering: waarden worden per veldkey opgehaald en import matcht eerst op veldkey, daarna op veldnaam. Hierdoor werken tekst_1/2/3/4, titels, minititels, FAQ-velden en andere ACF-tekstvelden wanneer ze op de site bestaan.
+
+= 1.2.32 =
+* Fix: ACF-export laadt nu de echte veldwaarden mee voor tekst_1/2/3/4, titelvelden, mintitels, FAQ-velden en andere ACF-velden.
+* Behoud: lege importwaarden wissen bestaande ACF-tekstvelden niet.
+
+= 1.2.31 =
+* Admin filterbalk opnieuw opgebouwd zodat paginering niet meer over de filterknoppen valt.
+
+
+= 1.2.28 =
+* Hotfix: lege ACF-tekstvelden uit een export overschrijven bestaande teksten niet meer. Samenvatting en gevulde Yoast/ACF-tekstwaarden worden nog wel bijgewerkt.
+* Hotfix: dubbele UITGELICHTE AFBEELDING-sectie uit pagina-export verwijderd.
+* Herstelknop toegevoegd om de laatste import via automatische pagina-back-ups terug te zetten.
 
 = 1.2.26 =
 * Server-side import-previewverificatie toegevoegd: import-run vereist nu een recente preview-hash van exact dezelfde TXT-inhoud.
