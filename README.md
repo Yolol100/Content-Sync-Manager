@@ -15,7 +15,7 @@ Admin-only mini-plugin voor TXT export/import van berichten, pagina’s en produ
 - Maak vooraf een database- en uploads-back-up.
 - Gebruik altijd eerst `Controleer bestand` voordat je importeert.
 - Een import-run wordt server-side geblokkeerd wanneer de TXT-inhoud niet exact overeenkomt met de laatst gecontroleerde preview van dezelfde gebruiker.
-- Media hernoemen staat standaard aan via `DCA_TB_ALLOW_MEDIA_FILE_RENAME`; dit is bewust niet aangepast in versie 1.2.26.
+- Media hernoemen staat standaard aan via `DCA_TB_ALLOW_MEDIA_FILE_RENAME`; dit is bewust niet aangepast in versie 1.2.35.
 
 ## Vereisten
 
@@ -50,13 +50,18 @@ Zet oude Code Snippets/WPCode-versies of oude pluginvarianten eerst uit voordat 
 
 ## Versie
 
-1.2.33
+1.2.35
 
 ## Changelog
 
-## 1.2.33
-- ACF-detectie werkt nu via actieve veldgroepen per pagina/product en is niet gekoppeld aan vaste veldnamen.
-- Export haalt waarden op via veldkey en import matcht eerst op veldkey, daarna op veldnaam.
+### 1.2.35
+- Media-rename aangescherpt: vul bij `Nieuwe bestandsnaam:` alleen de nieuwe naam in, zonder extensie. De bestaande extensie blijft behouden.
+- URL-vervangingen na media-hernoemen nemen nu ook gegenereerde afbeeldingsformaten mee wanneer WordPress nieuwe metadata genereert.
+
+
+## 1.2.34
+- Releasehygiëne: runtime-map, README-versie en request-inputverwerking aangescherpt.
+- ACF-detectie werkt via actieve veldgroepen per pagina/product en blijft veldkey-first importeren.
 
 ### 1.2.26
 

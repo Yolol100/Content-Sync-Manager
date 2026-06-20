@@ -256,7 +256,7 @@ function dca_tb_apply_standard_template_filter_where($where, $query) {
     $blocked = ['elementor_canvas', 'elementor_header_footer'];
     $blocked_sql = "'" . implode("','", array_map('esc_sql', $blocked)) . "'";
 
-    // AI-PATCH: houd de templatefilter bewust licht. Geen LIKE op geserialiseerde Elementor settings,
+    // Houd de templatefilter bewust licht. Geen LIKE op geserialiseerde Elementor settings,
     // omdat dat grote adminlijsten kan laten vastlopen. We sluiten alleen expliciete template-meta uit.
     if ($post_type === 'page') {
         $where .= " AND NOT EXISTS (
@@ -430,7 +430,7 @@ function dca_tb_content_badge($post_id) {
     $yoast_desc  = trim((string) get_post_meta($post_id, '_yoast_wpseo_metadesc', true));
 
     if (DCA_TB_LIGHT_ADMIN_LIST) {
-        // AI-PATCH: voorkom zware ACF/media/Elementor-detectie per rij in de adminlijst.
+        // Voorkom zware ACF/media/Elementor-detectie per rij in de adminlijst.
         $yoast_ok = ($yoast_title !== '' && $yoast_desc !== '');
         return '<span class="dca-badge ' . esc_attr($yoast_ok ? 'dca-badge-green' : 'dca-badge-yellow') . '">Snelle lijstweergave / Yoast ' . esc_html($yoast_ok ? 'ok' : 'mist') . '</span>';
     }
@@ -1163,6 +1163,54 @@ function dca_tb_validate_renamed_filetype($old_file, $new_filename) {
     return true;
 }
 
+function dca_tb_media_url_from_relative_path($relative_path) {
+    $relative_path = ltrim(wp_normalize_path((string) $relative_path), '/');
+
+    if ($relative_path === '') {
+        return '';
+    }
+
+    $uploads = wp_upload_dir();
+    if (empty($uploads['baseurl'])) {
+        return '';
+    }
+
+    return trailingslashit($uploads['baseurl']) . str_replace('%2F', '/', rawurlencode($relative_path));
+}
+
+function dca_tb_add_media_replace_pair($old_relative, $new_relative, &$replace_pairs) {
+    $old_url = dca_tb_media_url_from_relative_path($old_relative);
+    $new_url = dca_tb_media_url_from_relative_path($new_relative);
+
+    if ($old_url !== '' && $new_url !== '' && $old_url !== $new_url) {
+        $replace_pairs[$old_url] = $new_url;
+    }
+}
+
+function dca_tb_add_attachment_size_replace_pairs($old_relative, $new_relative, $old_metadata, $new_metadata, &$replace_pairs) {
+    if (!is_array($old_metadata) || empty($old_metadata['sizes']) || !is_array($old_metadata['sizes'])) {
+        return;
+    }
+
+    if (!is_array($new_metadata) || empty($new_metadata['sizes']) || !is_array($new_metadata['sizes'])) {
+        return;
+    }
+
+    $old_dir = trim(dirname(wp_normalize_path((string) $old_relative)), '.\/');
+    $new_dir = trim(dirname(wp_normalize_path((string) $new_relative)), '.\/');
+
+    foreach ($old_metadata['sizes'] as $size_key => $old_size) {
+        if (empty($old_size['file']) || empty($new_metadata['sizes'][$size_key]['file'])) {
+            continue;
+        }
+
+        $old_size_relative = ($old_dir !== '' ? trailingslashit($old_dir) : '') . wp_basename($old_size['file']);
+        $new_size_relative = ($new_dir !== '' ? trailingslashit($new_dir) : '') . wp_basename($new_metadata['sizes'][$size_key]['file']);
+
+        dca_tb_add_media_replace_pair($old_size_relative, $new_size_relative, $replace_pairs);
+    }
+}
+
 function dca_tb_rename_attachment_file($attachment_id, $requested_filename, &$replace_pairs) {
     $attachment_id = absint($attachment_id);
 
@@ -1232,8 +1280,11 @@ function dca_tb_rename_attachment_file($attachment_id, $requested_filename, &$re
         }
     }
 
-    $old_url = wp_get_attachment_url($attachment_id);
+    $old_relative = dca_tb_normalize_upload_relative_path(get_post_meta($attachment_id, '_wp_attached_file', true));
     $relative = ltrim(str_replace(wp_normalize_path($uploads['basedir']), '', wp_normalize_path($new_file)), '/');
+    $old_url = wp_get_attachment_url($attachment_id);
+    $new_url = dca_tb_media_url_from_relative_path($relative);
+    $old_metadata = wp_get_attachment_metadata($attachment_id);
 
     if (DCA_TB_IMPORT_DRY_RUN) {
         return ['renamed' => true, 'message' => 'Dry-run: bestandsnaam zou worden hernoemd naar ' . $new_filename . '.'];
@@ -1250,11 +1301,8 @@ function dca_tb_rename_attachment_file($attachment_id, $requested_filename, &$re
 
     update_post_meta($attachment_id, '_wp_attached_file', $relative);
 
-    $new_url = trailingslashit($uploads['baseurl']) . str_replace('%2F', '/', rawurlencode($relative));
-    $new_url = str_replace('%2F', '/', $new_url);
-
     $attachment = get_post($attachment_id);
-    if ($attachment && $old_url && $attachment->guid === $old_url) {
+    if ($attachment && $old_url && $new_url && $attachment->guid === $old_url) {
         wp_update_post([
             'ID'   => $attachment_id,
             'guid' => esc_url_raw($new_url),
@@ -1268,11 +1316,10 @@ function dca_tb_rename_attachment_file($attachment_id, $requested_filename, &$re
     $metadata = wp_generate_attachment_metadata($attachment_id, $new_file);
     if (!is_wp_error($metadata) && !empty($metadata)) {
         wp_update_attachment_metadata($attachment_id, $metadata);
+        dca_tb_add_attachment_size_replace_pairs($old_relative, $relative, $old_metadata, $metadata, $replace_pairs);
     }
 
-    if ($old_url && $new_url && $old_url !== $new_url) {
-        $replace_pairs[$old_url] = $new_url;
-    }
+    dca_tb_add_media_replace_pair($old_relative, $relative, $replace_pairs);
 
     return ['renamed' => true, 'message' => 'Bestandsnaam hernoemd naar ' . $new_filename . '.'];
 }
@@ -3064,6 +3111,30 @@ function dca_tb_can_edit_post($post_id) {
     return $post && dca_tb_is_supported_post_type($post->post_type) && current_user_can('edit_post', $post_id);
 }
 
+function dca_tb_post_int($key) {
+    if (!isset($_POST[$key]) || is_array($_POST[$key])) {
+        return 0;
+    }
+
+    return absint(wp_unslash($_POST[$key]));
+}
+
+function dca_tb_post_text($key) {
+    if (!isset($_POST[$key]) || is_array($_POST[$key])) {
+        return '';
+    }
+
+    return (string) wp_unslash($_POST[$key]);
+}
+
+function dca_tb_post_id_list($key) {
+    if (!isset($_POST[$key]) || !is_array($_POST[$key])) {
+        return [];
+    }
+
+    return dca_tb_sanitize_post_id_list(wp_unslash($_POST[$key]));
+}
+
 function dca_tb_current_user_can_use_manager() {
     /**
      * Filters the capability required to use the Content Sync Manager.
@@ -3086,7 +3157,7 @@ function dca_tb_require_manager_access() {
 
 
 function dca_tb_request_has_destructive_confirmation() {
-    return isset($_POST['destructive_confirm']) && hash_equals('1', (string) wp_unslash($_POST['destructive_confirm']));
+    return hash_equals('1', dca_tb_post_text('destructive_confirm'));
 }
 
 function dca_tb_import_preview_hash($txt) {
@@ -3118,7 +3189,7 @@ function dca_tb_mark_import_previewed($txt, $preview) {
 }
 
 function dca_tb_require_matching_import_preview($txt) {
-    $submitted_hash = isset($_POST['preview_hash']) ? sanitize_text_field(wp_unslash($_POST['preview_hash'])) : '';
+    $submitted_hash = sanitize_text_field(dca_tb_post_text('preview_hash'));
     $expected_hash = dca_tb_import_preview_hash($txt);
 
     if ($submitted_hash === '' || !hash_equals($expected_hash, $submitted_hash)) {
@@ -3153,7 +3224,7 @@ function dca_tb_require_ajax_access() {
 add_action('wp_ajax_dca_get_acf_textblock', function () {
     dca_tb_require_ajax_access();
 
-    $post_id = absint($_POST['post_id'] ?? 0);
+    $post_id = dca_tb_post_int('post_id');
 
     if (!dca_tb_can_edit_post($post_id)) {
         wp_send_json_error(['message' => 'Geen toegang tot deze pagina.']);
@@ -3169,9 +3240,7 @@ add_action('wp_ajax_dca_get_acf_textblock', function () {
 add_action('wp_ajax_dca_preload_acf_textblocks', function () {
     dca_tb_require_ajax_access();
 
-    $post_ids = isset($_POST['post_ids']) && is_array($_POST['post_ids'])
-        ? dca_tb_sanitize_post_id_list($_POST['post_ids'])
-        : [];
+    $post_ids = dca_tb_post_id_list('post_ids');
 
     if (count($post_ids) > DCA_TB_MAX_IMPORT_PAGES) {
         $post_ids = array_slice($post_ids, 0, DCA_TB_MAX_IMPORT_PAGES);
@@ -3198,8 +3267,8 @@ add_action('wp_ajax_dca_save_acf_textblock', function () {
     dca_tb_require_ajax_access();
     dca_tb_require_destructive_confirmation();
 
-    $post_id = absint($_POST['post_id'] ?? 0);
-    $text = isset($_POST['textblock']) ? wp_unslash($_POST['textblock']) : '';
+    $post_id = dca_tb_post_int('post_id');
+    $text = dca_tb_post_text('textblock');
 
     if (!dca_tb_can_edit_post($post_id)) {
         wp_send_json_error(['message' => 'Geen toegang tot deze pagina.']);
@@ -3224,9 +3293,7 @@ add_action('wp_ajax_dca_save_acf_textblock', function () {
 add_action('wp_ajax_dca_bulk_get_acf_textblocks', function () {
     dca_tb_require_ajax_access();
 
-    $post_ids = isset($_POST['post_ids']) && is_array($_POST['post_ids'])
-        ? dca_tb_sanitize_post_id_list($_POST['post_ids'])
-        : [];
+    $post_ids = dca_tb_post_id_list('post_ids');
 
     if (!$post_ids) {
         wp_send_json_error(['message' => 'Selecteer eerst één of meerdere items.']);
@@ -3251,7 +3318,7 @@ add_action('wp_ajax_dca_bulk_get_acf_textblocks', function () {
 add_action('wp_ajax_dca_txt_import_preview', function () {
     dca_tb_require_ajax_access();
 
-    $txt = isset($_POST['txt_content']) ? wp_unslash($_POST['txt_content']) : '';
+    $txt = dca_tb_post_text('txt_content');
     $preview = dca_tb_bulk_preview($txt);
 
     if (is_wp_error($preview)) {
@@ -3268,7 +3335,7 @@ add_action('wp_ajax_dca_txt_import_run', function () {
     dca_tb_require_ajax_access();
     dca_tb_require_destructive_confirmation();
 
-    $txt = isset($_POST['txt_content']) ? wp_unslash($_POST['txt_content']) : '';
+    $txt = dca_tb_post_text('txt_content');
     dca_tb_require_matching_import_preview($txt);
 
     $result = dca_tb_bulk_save($txt);
@@ -3303,7 +3370,7 @@ add_action('wp_ajax_dca_restore_last_page_backup', function () {
     dca_tb_require_ajax_access();
     dca_tb_require_destructive_confirmation();
 
-    $post_id = absint($_POST['post_id'] ?? 0);
+    $post_id = dca_tb_post_int('post_id');
     $restore = dca_tb_restore_last_page_backup($post_id);
 
     if (is_wp_error($restore)) {
@@ -3340,7 +3407,7 @@ add_action('wp_ajax_dca_restore_last_media_backup', function () {
     dca_tb_require_ajax_access();
     dca_tb_require_destructive_confirmation();
 
-    $attachment_id = absint($_POST['attachment_id'] ?? 0);
+    $attachment_id = dca_tb_post_int('attachment_id');
     $restore = dca_tb_restore_last_media_backup($attachment_id);
 
     if (is_wp_error($restore)) {

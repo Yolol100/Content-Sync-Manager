@@ -160,9 +160,7 @@ document.addEventListener('DOMContentLoaded',function(){
                 ajax('dca_preload_acf_textblocks',{post_ids:ids}).then(d=>{if(d&&d.success&&d.data.items)cache=d.data.items}).catch(()=>{});
             }
     
-            // AI-PATCH: automatische preload uitgeschakeld.
-            // Op grote sites bouwde dit direct voor alle zichtbare rijen zware ACF/media/Yoast exports via AJAX,
-            // waardoor pagina-/bericht-/productlijsten konden vastlopen. Content wordt nu pas opgehaald bij openen/exporteren.
+            // Automatische preload blijft uitgeschakeld: grote adminlijsten bouwen exportdata pas op bij openen/exporteren.
     
             function saveBulkDraft(){
                 try{

@@ -4,7 +4,7 @@ Tags: admin, acf, yoast, import
 Requires at least: 6.2
 Tested up to: 6.2
 Requires PHP: 7.4
-Stable tag: 1.2.34
+Stable tag: 1.2.35
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -24,6 +24,9 @@ Deze private plugin voegt een compacte admin bulkeditor toe voor pagina's, beric
 4. Test eerst export, preview en daarna import.
 
 == Changelog ==
+
+= 1.2.35 =
+* Media-rename aangescherpt: veld "Nieuwe bestandsnaam" wijzigt alleen de naam voor de bestaande extensie. Subsize-URL-vervangingen worden meegenomen na hernoemen.
 
 = 1.2.34 =
 * Verbetering: ACF-export detecteert velden nu dynamisch via de actieve ACF-veldgroepen van de pagina of het product, niet via vaste veldnamen.
