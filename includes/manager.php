@@ -8,7 +8,7 @@
 defined('ABSPATH') || exit;
 
 /**
- * Content Sync Manager + USP + Yoast + Media Rename + Compacte Bulkeditor.
+ * Content Sync Manager + USP + SEO-problemenrapportage + Media Rename + Compacte Bulkeditor.
  */
 
 if (!defined('DCA_TB_ALLOW_MEDIA_FILE_RENAME')) {
@@ -68,11 +68,27 @@ function dca_tb_usp_fields() {
 }
 
 function dca_tb_supported_post_types() {
-    return ['page', 'post', 'product'];
+    $defaults = ['page', 'post'];
+
+    if (post_type_exists('product')) {
+        $defaults[] = 'product';
+    }
+
+    $post_types = apply_filters('dca_tb_supported_post_types', $defaults);
+
+    if (!is_array($post_types)) {
+        $post_types = $defaults;
+    }
+
+    $post_types = array_values(array_unique(array_filter(array_map('sanitize_key', $post_types))));
+
+    return array_values(array_filter($post_types, static function ($post_type) use ($defaults) {
+        return in_array($post_type, $defaults, true) || post_type_exists($post_type);
+    }));
 }
 
 function dca_tb_is_supported_post_type($post_type) {
-    return in_array((string) $post_type, dca_tb_supported_post_types(), true);
+    return in_array(sanitize_key((string) $post_type), dca_tb_supported_post_types(), true);
 }
 
 function dca_tb_get_admin_post_type() {
@@ -100,7 +116,14 @@ function dca_tb_post_type_label_single($post_id) {
         return 'PRODUCT';
     }
 
-    return 'PAGINA';
+    if ($post_type === 'page') {
+        return 'PAGINA';
+    }
+
+    $object = $post_type ? get_post_type_object($post_type) : null;
+    $label = $object && !empty($object->labels->singular_name) ? $object->labels->singular_name : (string) $post_type;
+
+    return strtoupper(dca_tb_clean_text($label));
 }
 
 function dca_tb_post_type_label_plural($post_type) {
@@ -112,7 +135,13 @@ function dca_tb_post_type_label_plural($post_type) {
         return 'producten';
     }
 
-    return 'pagina’s';
+    if ($post_type === 'page') {
+        return 'pagina’s';
+    }
+
+    $object = $post_type ? get_post_type_object($post_type) : null;
+
+    return $object && !empty($object->labels->name) ? strtolower(dca_tb_clean_text($object->labels->name)) : 'items';
 }
 
 function dca_tb_text($value) {
@@ -176,6 +205,7 @@ function dca_tb_contentblock_end_markers($i) {
 
     $markers[] = 'USP';
     $markers[] = 'FAQ';
+    $markers[] = 'SEO META';
     $markers[] = 'YOAST SEO';
     $markers[] = 'SAMENVATTING';
     $markers[] = 'UITGELICHTE AFBEELDING';
@@ -390,13 +420,33 @@ function dca_tb_render_textblock_column($column, $post_id) {
     );
 }
 
-add_filter('manage_pages_columns', 'dca_tb_add_textblock_column');
-add_filter('manage_posts_columns', 'dca_tb_add_textblock_column');
-add_filter('manage_product_posts_columns', 'dca_tb_add_textblock_column');
+function dca_tb_register_textblock_columns() {
+    static $registered = false;
 
-add_action('manage_pages_custom_column', 'dca_tb_render_textblock_column', 10, 2);
-add_action('manage_posts_custom_column', 'dca_tb_render_textblock_column', 10, 2);
-add_action('manage_product_posts_custom_column', 'dca_tb_render_textblock_column', 10, 2);
+    if ($registered || !is_admin()) {
+        return;
+    }
+
+    $registered = true;
+
+    foreach (dca_tb_supported_post_types() as $post_type) {
+        if ($post_type === 'page') {
+            add_filter('manage_pages_columns', 'dca_tb_add_textblock_column');
+            add_action('manage_pages_custom_column', 'dca_tb_render_textblock_column', 10, 2);
+            continue;
+        }
+
+        if ($post_type === 'post') {
+            add_filter('manage_posts_columns', 'dca_tb_add_textblock_column');
+            add_action('manage_posts_custom_column', 'dca_tb_render_textblock_column', 10, 2);
+            continue;
+        }
+
+        add_filter('manage_' . $post_type . '_posts_columns', 'dca_tb_add_textblock_column');
+        add_action('manage_' . $post_type . '_posts_custom_column', 'dca_tb_render_textblock_column', 10, 2);
+    }
+}
+add_action('admin_init', 'dca_tb_register_textblock_columns');
 
 function dca_tb_update_badge($post_id) {
     $time = absint(get_post_meta($post_id, '_dca_acf_textblock_updated_at', true));
@@ -426,13 +476,13 @@ function dca_tb_content_badge($post_id) {
         return '<span class="dca-badge dca-badge-muted">Niet ondersteund</span>';
     }
 
-    $yoast_title = trim((string) get_post_meta($post_id, '_yoast_wpseo_title', true));
-    $yoast_desc  = trim((string) get_post_meta($post_id, '_yoast_wpseo_metadesc', true));
+    $seo_status = dca_tb_get_seo_status($post_id);
+    $seo_ok = !empty($seo_status['ok']);
+    $seo_label = (string) ($seo_status['label'] ?? 'SEO');
 
     if (DCA_TB_LIGHT_ADMIN_LIST) {
         // Voorkom zware ACF/media/Elementor-detectie per rij in de adminlijst.
-        $yoast_ok = ($yoast_title !== '' && $yoast_desc !== '');
-        return '<span class="dca-badge ' . esc_attr($yoast_ok ? 'dca-badge-green' : 'dca-badge-yellow') . '">Snelle lijstweergave / Yoast ' . esc_html($yoast_ok ? 'ok' : 'mist') . '</span>';
+        return '<span class="dca-badge ' . esc_attr($seo_ok ? 'dca-badge-green' : 'dca-badge-yellow') . '">Snelle lijstweergave / ' . esc_html($seo_label) . ' ' . esc_html($seo_ok ? 'ok' : 'mist') . '</span>';
     }
 
     $media_count = count(dca_tb_collect_media_ids($post_id));
@@ -440,15 +490,16 @@ function dca_tb_content_badge($post_id) {
     if ($post->post_type === 'post') {
         $has_title   = trim((string) $post->post_title) !== '';
         $has_content = trim((string) $post->post_content) !== '';
-        $complete = ($has_title && $has_content && $yoast_title !== '' && $yoast_desc !== '');
+        $complete = ($has_title && $has_content && $seo_ok);
         $class = $complete ? 'dca-badge-green' : 'dca-badge-yellow';
 
         return sprintf(
-            '<span class="dca-badge %s">Titel %s / Content %s / Yoast %s / %d media</span>',
+            '<span class="dca-badge %s">Titel %s / Content %s / %s %s / %d media</span>',
             esc_attr($class),
             $has_title ? 'ok' : 'mist',
             $has_content ? 'ok' : 'mist',
-            ($yoast_title && $yoast_desc) ? 'ok' : 'mist',
+            esc_html($seo_label),
+            $seo_ok ? 'ok' : 'mist',
             absint($media_count)
         );
     }
@@ -472,15 +523,16 @@ function dca_tb_content_badge($post_id) {
         }
     }
 
-    $complete = ($acf_total > 0 && $acf_filled === $acf_total && $yoast_title !== '' && $yoast_desc !== '');
+    $complete = ($acf_total > 0 && $acf_filled === $acf_total && $seo_ok);
     $class = $complete ? 'dca-badge-green' : 'dca-badge-yellow';
 
     return sprintf(
-        '<span class="dca-badge %s">ACF %d/%d / Yoast %s / %d media</span>',
+        '<span class="dca-badge %s">ACF %d/%d / %s %s / %d media</span>',
         esc_attr($class),
         absint($acf_filled),
         absint($acf_total),
-        ($yoast_title && $yoast_desc) ? 'ok' : 'mist',
+        esc_html($seo_label),
+        $seo_ok ? 'ok' : 'mist',
         absint($media_count)
     );
 }
@@ -779,8 +831,332 @@ function dca_tb_apply_featured_image_from_textblock($post_id, $textblock) {
     return true;
 }
 
-function dca_tb_yoast_end_markers() {
+function dca_tb_seo_section_markers() {
+    return ['SEO META', 'YOAST SEO'];
+}
+
+function dca_tb_seo_end_markers() {
     return ['SAMENVATTING', 'UITGELICHTE AFBEELDING', 'MEDIA'];
+}
+
+function dca_tb_post_content_end_markers() {
+    return array_merge(dca_tb_seo_section_markers(), dca_tb_seo_end_markers());
+}
+
+function dca_tb_yoast_end_markers() {
+    return dca_tb_seo_end_markers();
+}
+
+function dca_tb_active_seo_providers() {
+    $providers = [];
+
+    if (defined('WPSEO_VERSION') || class_exists('WPSEO_Options') || class_exists('Yoast\\WP\\SEO\\Main')) {
+        $providers[] = 'yoast';
+    }
+
+    if (defined('RANK_MATH_VERSION') || class_exists('RankMath') || class_exists('RankMath\\Runner')) {
+        $providers[] = 'rank_math';
+    }
+
+    return array_values(array_unique($providers));
+}
+
+function dca_tb_normalize_seo_provider($provider) {
+    $provider = sanitize_key((string) $provider);
+
+    if (in_array($provider, ['rankmath', 'rank-math', 'rank_math'], true)) {
+        return 'rank_math';
+    }
+
+    if ($provider === 'yoast') {
+        return 'yoast';
+    }
+
+    return '';
+}
+
+function dca_tb_seo_provider_label($provider) {
+    $provider = dca_tb_normalize_seo_provider($provider);
+
+    if ($provider === 'rank_math') {
+        return 'Rank Math';
+    }
+
+    if ($provider === 'yoast') {
+        return 'Yoast';
+    }
+
+    return 'SEO';
+}
+
+function dca_tb_get_seo_meta_spec($provider) {
+    $provider = dca_tb_normalize_seo_provider($provider);
+
+    if ($provider === '') {
+        return [];
+    }
+
+    if ($provider === 'rank_math') {
+        return [
+            'SEO title:' => [
+                'key'  => 'rank_math_title',
+                'type' => 'text',
+            ],
+            'Meta description:' => [
+                'key'  => 'rank_math_description',
+                'type' => 'textarea',
+            ],
+            'Focus keyphrase:' => [
+                'key'  => 'rank_math_focus_keyword',
+                'type' => 'text',
+            ],
+            'Canonical URL:' => [
+                'key'  => 'rank_math_canonical_url',
+                'type' => 'url',
+            ],
+            'Robots noindex:' => [
+                'key'  => 'rank_math_robots',
+                'type' => 'robot_flag',
+                'flag' => 'noindex',
+            ],
+            'Robots nofollow:' => [
+                'key'  => 'rank_math_robots',
+                'type' => 'robot_flag',
+                'flag' => 'nofollow',
+            ],
+            'Open Graph title:' => [
+                'key'  => 'rank_math_facebook_title',
+                'type' => 'text',
+            ],
+            'Open Graph description:' => [
+                'key'  => 'rank_math_facebook_description',
+                'type' => 'textarea',
+            ],
+            'Open Graph image:' => [
+                'key'  => 'rank_math_facebook_image',
+                'type' => 'url',
+            ],
+            'Twitter title:' => [
+                'key'  => 'rank_math_twitter_title',
+                'type' => 'text',
+            ],
+            'Twitter description:' => [
+                'key'  => 'rank_math_twitter_description',
+                'type' => 'textarea',
+            ],
+            'Twitter image:' => [
+                'key'  => 'rank_math_twitter_image',
+                'type' => 'url',
+            ],
+            'SEO score:' => [
+                'key'      => 'rank_math_seo_score',
+                'type'     => 'int',
+                'snapshot' => true,
+            ],
+        ];
+    }
+
+    return [
+        'SEO title:' => [
+            'key'  => '_yoast_wpseo_title',
+            'type' => 'text',
+        ],
+        'Meta description:' => [
+            'key'  => '_yoast_wpseo_metadesc',
+            'type' => 'textarea',
+        ],
+        'Focus keyphrase:' => [
+            'key'  => '_yoast_wpseo_focuskw',
+            'type' => 'text',
+        ],
+        'Canonical URL:' => [
+            'key'  => '_yoast_wpseo_canonical',
+            'type' => 'url',
+        ],
+        'Robots noindex:' => [
+            'key'  => '_yoast_wpseo_meta-robots-noindex',
+            'type' => 'bool',
+        ],
+        'Robots nofollow:' => [
+            'key'  => '_yoast_wpseo_meta-robots-nofollow',
+            'type' => 'bool',
+        ],
+        'Open Graph title:' => [
+            'key'  => '_yoast_wpseo_opengraph-title',
+            'type' => 'text',
+        ],
+        'Open Graph description:' => [
+            'key'  => '_yoast_wpseo_opengraph-description',
+            'type' => 'textarea',
+        ],
+        'Open Graph image:' => [
+            'key'  => '_yoast_wpseo_opengraph-image',
+            'type' => 'url',
+        ],
+        'Twitter title:' => [
+            'key'  => '_yoast_wpseo_twitter-title',
+            'type' => 'text',
+        ],
+        'Twitter description:' => [
+            'key'  => '_yoast_wpseo_twitter-description',
+            'type' => 'textarea',
+        ],
+        'Twitter image:' => [
+            'key'  => '_yoast_wpseo_twitter-image',
+            'type' => 'url',
+        ],
+        'SEO score:' => [
+            'key'      => '_yoast_wpseo_linkdex',
+            'type'     => 'int',
+            'snapshot' => true,
+        ],
+        'Readability score:' => [
+            'key'      => '_yoast_wpseo_content_score',
+            'type'     => 'int',
+            'snapshot' => true,
+        ],
+    ];
+}
+
+function dca_tb_post_has_meta_for_provider($post_id, $provider) {
+    $spec = dca_tb_get_seo_meta_spec($provider);
+
+    foreach (['SEO title:', 'Meta description:', 'Focus keyphrase:'] as $label) {
+        if (empty($spec[$label]['key'])) {
+            continue;
+        }
+
+        $value = get_post_meta($post_id, $spec[$label]['key'], true);
+        if (trim((string) $value) !== '') {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+function dca_tb_detect_seo_provider_for_export($post_id) {
+    $active = dca_tb_active_seo_providers();
+
+    if (count($active) === 1) {
+        return $active[0];
+    }
+
+    if (dca_tb_post_has_meta_for_provider($post_id, 'rank_math') && !dca_tb_post_has_meta_for_provider($post_id, 'yoast')) {
+        return 'rank_math';
+    }
+
+    if (dca_tb_post_has_meta_for_provider($post_id, 'yoast')) {
+        return 'yoast';
+    }
+
+    if (in_array('yoast', $active, true)) {
+        return 'yoast';
+    }
+
+    if (in_array('rank_math', $active, true)) {
+        return 'rank_math';
+    }
+
+    return '';
+}
+
+function dca_tb_get_seo_status($post_id) {
+    $provider = dca_tb_detect_seo_provider_for_export($post_id);
+    $spec = dca_tb_get_seo_meta_spec($provider);
+    $title_key = $spec['SEO title:']['key'] ?? '';
+    $desc_key = $spec['Meta description:']['key'] ?? '';
+    $title = $title_key !== '' ? trim((string) get_post_meta($post_id, $title_key, true)) : '';
+    $desc = $desc_key !== '' ? trim((string) get_post_meta($post_id, $desc_key, true)) : '';
+
+    if ($title === '' || $desc === '') {
+        $alt_provider = $provider === 'yoast' ? 'rank_math' : 'yoast';
+        $alt_spec = dca_tb_get_seo_meta_spec($alt_provider);
+        $alt_title_key = $alt_spec['SEO title:']['key'] ?? '';
+        $alt_desc_key = $alt_spec['Meta description:']['key'] ?? '';
+        $alt_title = $alt_title_key !== '' ? trim((string) get_post_meta($post_id, $alt_title_key, true)) : '';
+        $alt_desc = $alt_desc_key !== '' ? trim((string) get_post_meta($post_id, $alt_desc_key, true)) : '';
+
+        if ($alt_title !== '' || $alt_desc !== '') {
+            $provider = $alt_provider;
+            $title = $alt_title;
+            $desc = $alt_desc;
+        }
+    }
+
+    return [
+        'provider' => $provider,
+        'label'    => dca_tb_seo_provider_label($provider),
+        'ok'       => $title !== '' && $desc !== '',
+    ];
+}
+
+function dca_tb_rank_math_robots_to_array($value) {
+    if (is_array($value)) {
+        return array_values(array_unique(array_filter(array_map('sanitize_key', $value))));
+    }
+
+    $value = trim((string) $value);
+
+    if ($value === '') {
+        return [];
+    }
+
+    $maybe = maybe_unserialize($value);
+    if (is_array($maybe)) {
+        return array_values(array_unique(array_filter(array_map('sanitize_key', $maybe))));
+    }
+
+    return array_values(array_unique(array_filter(array_map('sanitize_key', preg_split('/[,
+]+/', $value)))));
+}
+
+function dca_tb_seo_meta_value_for_export($post_id, $provider, $field) {
+    $type = $field['type'] ?? 'text';
+
+    if ($type === 'robot_flag') {
+        $robots = dca_tb_rank_math_robots_to_array(get_post_meta($post_id, $field['key'], true));
+        return in_array($field['flag'] ?? '', $robots, true) ? '1' : '0';
+    }
+
+    $value = get_post_meta($post_id, $field['key'], true);
+
+    if ($type === 'bool') {
+        return in_array(strtolower(trim((string) $value)), ['1', 'true', 'yes', 'ja', 'on'], true) ? '1' : '0';
+    }
+
+    if ($type === 'int') {
+        return trim((string) $value) === '' ? '' : (string) absint($value);
+    }
+
+    return dca_tb_text($value);
+}
+
+function dca_tb_validate_seo_meta_block($textblock, $required = false) {
+    $seo_meta_count = dca_tb_marker_count($textblock, 'SEO META');
+    $yoast_count = dca_tb_marker_count($textblock, 'YOAST SEO');
+
+    if ($seo_meta_count > 1) {
+        return new WP_Error('dca_duplicate_seo_meta', 'Opslaan gestopt: de kop "SEO META" komt meerdere keren voor. SEO-meta wordt niet geïmporteerd; verwijder dubbele SEO-secties uit het TXT-bestand.');
+    }
+
+    if ($yoast_count > 1) {
+        return new WP_Error('dca_duplicate_yoast', 'Opslaan gestopt: de kop "YOAST SEO" komt meerdere keren voor. SEO-meta wordt niet geïmporteerd; verwijder dubbele SEO-secties uit het TXT-bestand.');
+    }
+
+    if ($seo_meta_count && $yoast_count) {
+        return new WP_Error('dca_duplicate_seo_sections', 'Opslaan gestopt: gebruik SEO META of YOAST SEO, niet beide tegelijk. SEO-meta wordt niet geïmporteerd.');
+    }
+
+    if ($required && !$seo_meta_count && !$yoast_count) {
+        return new WP_Error('dca_missing_seo_meta', 'Opslaan gestopt: de kop "SEO META" of "YOAST SEO" ontbreekt.');
+    }
+
+    return true;
+}
+
+function dca_tb_save_seo_meta_from_textblock($post_id, $textblock) {
+    return true;
 }
 
 function dca_tb_media_end_markers() {
@@ -1560,7 +1936,7 @@ function dca_tb_save_media_items($post_id, $textblock) {
 }
 
 function dca_tb_acf_export_end_markers() {
-    return ['YOAST SEO', 'SAMENVATTING', 'UITGELICHTE AFBEELDING', 'MEDIA'];
+    return ['SEO META', 'YOAST SEO', 'SAMENVATTING', 'UITGELICHTE AFBEELDING', 'MEDIA'];
 }
 
 function dca_tb_acf_attachment_id_from_value($value) {
@@ -1949,10 +2325,15 @@ function dca_tb_validate_dynamic_acf_textblock($textblock) {
         return new WP_Error('dca_invalid_acf_fields', 'Opslaan gestopt: de kop "ACF VELDEN" ontbreekt of komt meerdere keren voor.');
     }
 
-    foreach (['YOAST SEO', 'MEDIA', 'SAMENVATTING', 'UITGELICHTE AFBEELDING'] as $marker) {
+    foreach (['SEO META', 'YOAST SEO', 'MEDIA', 'SAMENVATTING', 'UITGELICHTE AFBEELDING'] as $marker) {
         if (dca_tb_marker_count($textblock, $marker) > 1) {
             return new WP_Error('dca_duplicate_marker', 'Opslaan gestopt: de kop "' . $marker . '" komt meerdere keren voor.');
         }
+    }
+
+    $seo_validation = dca_tb_validate_seo_meta_block($textblock, false);
+    if (is_wp_error($seo_validation)) {
+        return $seo_validation;
     }
 
     $featured_validation = dca_tb_validate_featured_image_block($textblock);
@@ -2040,7 +2421,7 @@ function dca_tb_build_textblock($post_id) {
     }
 
     /**
-     * Berichten: alleen WordPress titel, content, Yoast en media.
+     * Berichten: alleen WordPress titel, content, samenvatting en media.
      */
     if ($post->post_type === 'post') {
         $out = [
@@ -2051,16 +2432,6 @@ function dca_tb_build_textblock($post_id) {
             'CONTENT',
             '',
             dca_tb_text($post->post_content),
-            '',
-            'YOAST SEO',
-            '',
-            'SEO title:',
-            '',
-            dca_tb_text(get_post_meta($post_id, '_yoast_wpseo_title', true)),
-            '',
-            'Meta description:',
-            '',
-            dca_tb_text(get_post_meta($post_id, '_yoast_wpseo_metadesc', true)),
             '',
             dca_tb_build_summary_block($post_id),
             '',
@@ -2081,16 +2452,6 @@ function dca_tb_build_textblock($post_id) {
 
     $out = [
         dca_tb_build_acf_fields_block($post_id),
-        '',
-        'YOAST SEO',
-        '',
-        'SEO title:',
-        '',
-        dca_tb_text(get_post_meta($post_id, '_yoast_wpseo_title', true)),
-        '',
-        'Meta description:',
-        '',
-        dca_tb_text(get_post_meta($post_id, '_yoast_wpseo_metadesc', true)),
         '',
         dca_tb_build_summary_block($post_id),
         '',
@@ -2119,8 +2480,9 @@ function dca_tb_validate_textblock($textblock) {
         return new WP_Error('dca_duplicate_usp', 'Opslaan gestopt: de kop "USP" komt meerdere keren voor.');
     }
 
-    if (dca_tb_marker_count($textblock, 'YOAST SEO') > 1) {
-        return new WP_Error('dca_duplicate_yoast', 'Opslaan gestopt: de kop "YOAST SEO" komt meerdere keren voor.');
+    $seo_validation = dca_tb_validate_seo_meta_block($textblock, false);
+    if (is_wp_error($seo_validation)) {
+        return $seo_validation;
     }
 
     if (dca_tb_marker_count($textblock, 'MEDIA') > 1) {
@@ -2160,7 +2522,7 @@ function dca_tb_validate_textblock($textblock) {
         }
     }
 
-    $faq = dca_tb_section($textblock, 'FAQ', ['YOAST SEO', 'SAMENVATTING', 'UITGELICHTE AFBEELDING', 'MEDIA']);
+    $faq = dca_tb_section($textblock, 'FAQ', ['SEO META', 'YOAST SEO', 'SAMENVATTING', 'UITGELICHTE AFBEELDING', 'MEDIA']);
 
     if ($faq === null) {
         return new WP_Error('dca_invalid_faq', 'Opslaan gestopt: FAQ kon niet exact gelezen worden.');
@@ -2174,7 +2536,7 @@ function dca_tb_validate_textblock($textblock) {
 }
 
 function dca_tb_validate_post_textblock($textblock) {
-    foreach (['TITEL', 'CONTENT', 'YOAST SEO'] as $marker) {
+    foreach (['TITEL', 'CONTENT'] as $marker) {
         $count = dca_tb_marker_count($textblock, $marker);
 
         if ($count === 0) {
@@ -2198,23 +2560,14 @@ function dca_tb_validate_post_textblock($textblock) {
         return new WP_Error('dca_duplicate_featured_image', 'Opslaan gestopt: de kop "UITGELICHTE AFBEELDING" komt meerdere keren voor.');
     }
 
+    $seo_validation = dca_tb_validate_seo_meta_block($textblock, false);
+    if (is_wp_error($seo_validation)) {
+        return $seo_validation;
+    }
+
     $featured_validation = dca_tb_validate_featured_image_block($textblock);
     if (is_wp_error($featured_validation)) {
         return $featured_validation;
-    }
-
-    $yoast = dca_tb_section($textblock, 'YOAST SEO', dca_tb_yoast_end_markers());
-
-    if ($yoast === null) {
-        return new WP_Error('dca_invalid_yoast', 'Opslaan gestopt: YOAST SEO kon niet exact gelezen worden.');
-    }
-
-    if (dca_tb_label_marker_count($yoast, 'SEO title:') !== 1) {
-        return new WP_Error('dca_invalid_yoast_title', 'Opslaan gestopt: "SEO title:" ontbreekt of komt meerdere keren voor.');
-    }
-
-    if (dca_tb_label_marker_count($yoast, 'Meta description:') !== 1) {
-        return new WP_Error('dca_invalid_yoast_desc', 'Opslaan gestopt: "Meta description:" ontbreekt of komt meerdere keren voor.');
     }
 
     return true;
@@ -2270,7 +2623,7 @@ function dca_tb_save_to_fields($post_id, $textblock, $source = 'save') {
     $textblock = trim(str_replace(["\r\n", "\r"], "\n", (string) $textblock));
 
     /**
-     * Berichten: opslaan naar post_title, post_content en Yoast.
+     * Berichten: opslaan naar post_title, post_content, samenvatting en media.
      */
     if ($post->post_type === 'post') {
         $validation = dca_tb_validate_post_textblock($textblock);
@@ -2286,12 +2639,7 @@ function dca_tb_save_to_fields($post_id, $textblock, $source = 'save') {
         dca_tb_add_backup($post_id, $source);
 
         $title   = dca_tb_section($textblock, 'TITEL', ['CONTENT']);
-        $content = dca_tb_section($textblock, 'CONTENT', ['YOAST SEO']);
-        $yoast   = dca_tb_section($textblock, 'YOAST SEO', dca_tb_yoast_end_markers());
-
-        $seo_title = dca_tb_label($yoast, 'SEO title:', ['Meta description:']);
-        $meta_desc = dca_tb_label($yoast, 'Meta description:');
-
+        $content = dca_tb_section($textblock, 'CONTENT', dca_tb_post_content_end_markers());
         $post_update = [
             'ID' => $post_id,
         ];
@@ -2315,14 +2663,6 @@ function dca_tb_save_to_fields($post_id, $textblock, $source = 'save') {
             if (is_wp_error($updated)) {
                 return $updated;
             }
-        }
-
-        if ($seo_title !== null && dca_tb_has_importable_text_value($seo_title) && (DCA_TB_OVERWRITE_EXISTING_TEXT || !dca_tb_has_existing_content_value(get_post_meta($post_id, '_yoast_wpseo_title', true)))) {
-            update_post_meta($post_id, '_yoast_wpseo_title', dca_tb_clean_text($seo_title));
-        }
-
-        if ($meta_desc !== null && dca_tb_has_importable_text_value($meta_desc) && (DCA_TB_OVERWRITE_EXISTING_TEXT || !dca_tb_has_existing_content_value(get_post_meta($post_id, '_yoast_wpseo_metadesc', true)))) {
-            update_post_meta($post_id, '_yoast_wpseo_metadesc', dca_tb_clean_text($meta_desc));
         }
 
         $featured = dca_tb_apply_featured_image_from_textblock($post_id, $textblock);
@@ -2363,20 +2703,6 @@ function dca_tb_save_to_fields($post_id, $textblock, $source = 'save') {
     $acf_save = dca_tb_save_dynamic_acf_fields($post_id, $textblock);
     if (is_wp_error($acf_save)) {
         return $acf_save;
-    }
-
-    if (dca_tb_marker_count($textblock, 'YOAST SEO') === 1) {
-        $yoast = dca_tb_section($textblock, 'YOAST SEO', dca_tb_yoast_end_markers());
-        $seo_title = dca_tb_label($yoast, 'SEO title:', ['Meta description:']);
-        $meta_desc = dca_tb_label($yoast, 'Meta description:');
-
-        if ($seo_title !== null && dca_tb_has_importable_text_value($seo_title) && (DCA_TB_OVERWRITE_EXISTING_TEXT || !dca_tb_has_existing_content_value(get_post_meta($post_id, '_yoast_wpseo_title', true)))) {
-            update_post_meta($post_id, '_yoast_wpseo_title', dca_tb_clean_text($seo_title));
-        }
-
-        if ($meta_desc !== null && dca_tb_has_importable_text_value($meta_desc) && (DCA_TB_OVERWRITE_EXISTING_TEXT || !dca_tb_has_existing_content_value(get_post_meta($post_id, '_yoast_wpseo_metadesc', true)))) {
-            update_post_meta($post_id, '_yoast_wpseo_metadesc', dca_tb_clean_text($meta_desc));
-        }
     }
 
     $summary = dca_tb_section($textblock, 'SAMENVATTING', ['UITGELICHTE AFBEELDING', 'MEDIA']);
@@ -2424,6 +2750,7 @@ function dca_tb_build_bulk_export($post_ids) {
             dca_tb_post_type_label_single($post_id) . ': ' . get_the_title($post_id),
             'URL: ' . get_permalink($post_id),
             'ID: ' . $post_id,
+            'Post type: ' . $post->post_type,
             str_repeat('=', 80),
             '',
             dca_tb_build_textblock($post_id),
@@ -2436,6 +2763,260 @@ function dca_tb_build_bulk_export($post_ids) {
         ? new WP_Error('dca_no_pages', 'Er zijn geen geldige berichten, pagina’s of producten geselecteerd.')
         : trim(implode("\n", $out));
 }
+
+function dca_tb_seo_problem_text($value) {
+    $value = wp_strip_all_tags(html_entity_decode((string) $value, ENT_QUOTES, get_bloginfo('charset')));
+    $value = remove_accents($value);
+    $value = preg_replace('/\s+/u', ' ', trim($value));
+
+    if (function_exists('mb_strtolower')) {
+        return mb_strtolower($value, get_bloginfo('charset') ?: 'UTF-8');
+    }
+
+    return strtolower($value);
+}
+
+function dca_tb_seo_problem_contains($haystack, $needle) {
+    $needle = dca_tb_seo_problem_text($needle);
+
+    if ($needle === '') {
+        return false;
+    }
+
+    return strpos(dca_tb_seo_problem_text($haystack), $needle) !== false;
+}
+
+function dca_tb_seo_problem_post_meta($post_id, $provider, $label) {
+    $spec = dca_tb_get_seo_meta_spec($provider);
+
+    if (empty($spec[$label]['key'])) {
+        return '';
+    }
+
+    return dca_tb_text(dca_tb_seo_meta_value_for_export($post_id, $provider, $spec[$label]));
+}
+
+function dca_tb_seo_problem_heading_texts($content) {
+    preg_match_all('/<h([2-6])\b[^>]*>(.*?)<\/h\1>/is', (string) $content, $matches);
+
+    return array_values(array_filter(array_map(function ($heading) {
+        return trim(wp_strip_all_tags($heading));
+    }, $matches[2] ?? [])));
+}
+
+function dca_tb_seo_problem_intro_text($content) {
+    if (preg_match('/<p\b[^>]*>(.*?)<\/p>/is', (string) $content, $match)) {
+        return trim(wp_strip_all_tags($match[1]));
+    }
+
+    $plain = trim(wp_strip_all_tags(strip_shortcodes((string) $content)));
+    $words = preg_split('/\s+/u', $plain, -1, PREG_SPLIT_NO_EMPTY);
+
+    return implode(' ', array_slice($words ?: [], 0, 50));
+}
+
+function dca_tb_seo_problem_links($content) {
+    $result = [
+        'internal' => false,
+        'external' => false,
+    ];
+    $home_host = wp_parse_url(home_url(), PHP_URL_HOST);
+    $home_host = $home_host ? preg_replace('/^www\./i', '', strtolower($home_host)) : '';
+
+    preg_match_all('/<a\b[^>]*href=["\']([^"\']+)["\'][^>]*>/i', (string) $content, $matches);
+
+    foreach ($matches[1] ?? [] as $href) {
+        $href = trim(html_entity_decode((string) $href, ENT_QUOTES, get_bloginfo('charset')));
+
+        if ($href === '' || strpos($href, '#') === 0 || preg_match('/^(mailto|tel):/i', $href)) {
+            continue;
+        }
+
+        if (strpos($href, '//') === 0) {
+            $href = (is_ssl() ? 'https:' : 'http:') . $href;
+        } elseif (strpos($href, '/') === 0) {
+            $result['internal'] = true;
+            continue;
+        }
+
+        $host = wp_parse_url($href, PHP_URL_HOST);
+        $scheme = wp_parse_url($href, PHP_URL_SCHEME);
+
+        if (!$host && !$scheme) {
+            $result['internal'] = true;
+            continue;
+        }
+
+        $host = $host ? preg_replace('/^www\./i', '', strtolower($host)) : '';
+
+        if ($host !== '' && $home_host !== '' && $host === $home_host) {
+            $result['internal'] = true;
+            continue;
+        }
+
+        if (in_array(strtolower((string) $scheme), ['http', 'https'], true)) {
+            $result['external'] = true;
+        }
+    }
+
+    return $result;
+}
+
+function dca_tb_seo_problem_image_alts($post_id, $content) {
+    $alts = [];
+
+    preg_match_all('/<img\b[^>]*>/i', (string) $content, $matches);
+
+    foreach ($matches[0] ?? [] as $image) {
+        if (preg_match('/\salt\s*=\s*(["\'])(.*?)\1/is', $image, $alt_match)) {
+            $alts[] = html_entity_decode($alt_match[2], ENT_QUOTES, get_bloginfo('charset'));
+        } else {
+            $alts[] = '';
+        }
+    }
+
+    if (has_post_thumbnail($post_id)) {
+        $thumbnail_id = get_post_thumbnail_id($post_id);
+        if ($thumbnail_id) {
+            $alts[] = get_post_meta($thumbnail_id, '_wp_attachment_image_alt', true);
+        }
+    }
+
+    return $alts;
+}
+
+function dca_tb_build_seo_problem_items($post_id) {
+    $post = get_post($post_id);
+
+    if (!$post) {
+        return [];
+    }
+
+    $provider = dca_tb_detect_seo_provider_for_export($post_id);
+    $spec = dca_tb_get_seo_meta_spec($provider);
+    $problems = [];
+    $seo_title = dca_tb_seo_problem_post_meta($post_id, $provider, 'SEO title:');
+    $meta_description = dca_tb_seo_problem_post_meta($post_id, $provider, 'Meta description:');
+    $focus_keyphrase = dca_tb_seo_problem_post_meta($post_id, $provider, 'Focus keyphrase:');
+    $content = (string) $post->post_content;
+    $plain_content = trim(wp_strip_all_tags(strip_shortcodes($content)));
+
+    if (empty($spec)) {
+        $problems[] = 'Geen actieve of opgeslagen Yoast/Rank Math SEO-provider gevonden.';
+    }
+
+    if ($seo_title === '') {
+        $problems[] = 'SEO title: ontbreekt.';
+    }
+
+    if ($meta_description === '') {
+        $problems[] = 'Meta description: ontbreekt.';
+    }
+
+    if ($focus_keyphrase === '') {
+        $problems[] = 'Focus keyphrase: ontbreekt.';
+    }
+
+    if ($focus_keyphrase !== '' && $seo_title !== '' && !dca_tb_seo_problem_contains($seo_title, $focus_keyphrase)) {
+        $problems[] = 'Keyphrase in SEO title: focus keyphrase staat niet in de SEO-title.';
+    }
+
+    if ($focus_keyphrase !== '' && $plain_content !== '' && !dca_tb_seo_problem_contains($plain_content, $focus_keyphrase)) {
+        $problems[] = 'Keyphrase dichtheid: focus keyphrase komt niet voor in de content.';
+    }
+
+    $intro = dca_tb_seo_problem_intro_text($content);
+    if ($focus_keyphrase !== '' && $intro !== '' && !dca_tb_seo_problem_contains($intro, $focus_keyphrase)) {
+        $problems[] = 'Keyphrase in introductie: focus keyphrase staat niet in de introductie.';
+    }
+
+    $headings = dca_tb_seo_problem_heading_texts($content);
+    if (empty($headings)) {
+        $problems[] = 'Koptekst-verdeling: er staan geen tussenkoppen in de content.';
+    } elseif ($focus_keyphrase !== '') {
+        $has_keyphrase_heading = false;
+        foreach ($headings as $heading) {
+            if (dca_tb_seo_problem_contains($heading, $focus_keyphrase)) {
+                $has_keyphrase_heading = true;
+                break;
+            }
+        }
+
+        if (!$has_keyphrase_heading) {
+            $problems[] = 'Keyphrase in subkop: geen tussenkop met focus keyphrase gevonden.';
+        }
+    }
+
+    $links = dca_tb_seo_problem_links($content);
+    if (empty($links['internal'])) {
+        $problems[] = 'Interne links: er staan geen interne links in de content.';
+    }
+
+    if (empty($links['external'])) {
+        $problems[] = 'Uitgaande links: er staan geen uitgaande links in de content.';
+    }
+
+    $image_alts = dca_tb_seo_problem_image_alts($post_id, $content);
+    if (empty($image_alts)) {
+        $problems[] = 'Afbeeldingen: er is geen afbeelding gevonden.';
+    } elseif ($focus_keyphrase !== '') {
+        $has_keyphrase_alt = false;
+        foreach ($image_alts as $alt) {
+            if (dca_tb_seo_problem_contains($alt, $focus_keyphrase)) {
+                $has_keyphrase_alt = true;
+                break;
+            }
+        }
+
+        if (!$has_keyphrase_alt) {
+            $problems[] = 'Keyphrase in afbeelding alt-attributen: geen afbeelding met focus keyphrase in alt-tekst gevonden.';
+        }
+    }
+
+    if (dca_tb_seo_problem_post_meta($post_id, $provider, 'Robots noindex:') === '1') {
+        $problems[] = 'Robots noindex: pagina staat op noindex.';
+    }
+
+    if (dca_tb_seo_problem_post_meta($post_id, $provider, 'Robots nofollow:') === '1') {
+        $problems[] = 'Robots nofollow: pagina staat op nofollow.';
+    }
+
+    $problems = array_values(array_unique(array_filter(array_map('dca_tb_text', $problems))));
+
+    return apply_filters('dca_tb_seo_problem_items', $problems, $post_id, $provider);
+}
+
+function dca_tb_build_seo_points_export($post_ids) {
+    $out = [];
+    $added = 0;
+
+    foreach (array_unique(array_map('absint', (array) $post_ids)) as $post_id) {
+        $post = $post_id ? get_post($post_id) : null;
+
+        if (!$post || !dca_tb_is_supported_post_type($post->post_type) || !current_user_can('edit_post', $post_id)) {
+            continue;
+        }
+
+        $out[] = get_the_title($post_id);
+        $problems = dca_tb_build_seo_problem_items($post_id);
+
+        if (empty($problems)) {
+            $out[] = '- Geen problemen gevonden.';
+        } else {
+            foreach ($problems as $problem) {
+                $out[] = '- ' . $problem;
+            }
+        }
+
+        $out[] = '';
+        $added++;
+    }
+
+    return $added === 0
+        ? new WP_Error('dca_no_seo_pages', 'Er zijn geen geldige items geselecteerd voor SEO-problemenexport.')
+        : trim(implode("\n", $out));
+}
+
 
 function dca_tb_normalize_title_for_match($value) {
     $value = wp_strip_all_tags(html_entity_decode((string) $value, ENT_QUOTES, get_bloginfo('charset')));
@@ -2458,7 +3039,7 @@ function dca_tb_url_matches_post($url, $post_id) {
     $url = trim((string) $url);
 
     if ($url === '') {
-        return true;
+        return false;
     }
 
     $source_path = dca_tb_normalize_compare_url_path($url);
@@ -2473,7 +3054,7 @@ function dca_tb_url_matches_post($url, $post_id) {
 
 
 function dca_tb_import_label_to_post_type($label) {
-    $label = strtoupper(trim((string) $label));
+    $label = strtoupper(dca_tb_clean_text((string) $label));
 
     if ($label === 'BERICHT') {
         return 'post';
@@ -2483,7 +3064,20 @@ function dca_tb_import_label_to_post_type($label) {
         return 'product';
     }
 
-    return 'page';
+    if ($label === 'PAGINA') {
+        return 'page';
+    }
+
+    foreach (dca_tb_supported_post_types() as $post_type) {
+        $object = get_post_type_object($post_type);
+        $singular = $object && !empty($object->labels->singular_name) ? $object->labels->singular_name : $post_type;
+
+        if ($label === strtoupper(dca_tb_clean_text($singular))) {
+            return $post_type;
+        }
+    }
+
+    return '';
 }
 
 function dca_tb_find_post_by_url_path($url, array $allowed_post_types) {
@@ -2647,22 +3241,22 @@ function dca_tb_parse_bulk_file($txt) {
     // - labels may contain extra spaces around the colon;
     // - blank lines around separators are allowed;
     // - matching is case-insensitive.
-    $pattern = '/^={10,}[^\S\n]*\n\s*(PAGINA|BERICHT|PRODUCT)\s*:\s*(.*?)\n\s*URL\s*:\s*(.*?)\n\s*ID\s*:\s*(\d+)\s*\n={10,}[^\S\n]*(?:\n)+(.*?)(?=^={10,}[^\S\n]*\n\s*(?:PAGINA|BERICHT|PRODUCT)\s*:|\z)/ims';
+    $pattern = '/^={10,}[^\S\n]*\n\s*([^:\n]+)\s*:\s*(.*?)\n\s*URL\s*:\s*(.*?)\n\s*ID\s*:\s*(\d+)\s*\n(?:\s*Post type\s*:\s*([a-z0-9_-]+)\s*\n)?={10,}[^\S\n]*(?:\n)+(.*?)(?=^={10,}[^\S\n]*\n\s*[^:\n]+\s*:|\z)/ims';
 
     if (preg_match_all($pattern, $txt, $matches, PREG_SET_ORDER)) {
         foreach ($matches as $m) {
             $items[] = [
-                'source_type'  => dca_tb_import_label_to_post_type($m[1]),
+                'source_type'  => !empty($m[5]) && dca_tb_is_supported_post_type($m[5]) ? sanitize_key($m[5]) : dca_tb_import_label_to_post_type($m[1]),
                 'source_title' => trim($m[2]),
                 'source_url'   => trim($m[3]),
                 'source_id'    => absint($m[4]),
-                'textblock'    => trim($m[5]),
+                'textblock'    => trim($m[6]),
             ];
         }
     }
 
     return empty($items)
-        ? new WP_Error('dca_invalid_import_format', 'Geen geldige blokken gevonden. Gebruik tekst met PAGINA/BERICHT/PRODUCT, URL en ID uit een Content Sync-export.')
+        ? new WP_Error('dca_invalid_import_format', 'Geen geldige blokken gevonden. Gebruik tekst met itemkop, URL en ID uit een Content Sync-export.')
         : $items;
 }
 
@@ -2688,7 +3282,7 @@ function dca_tb_bulk_preview($txt) {
         $media = dca_tb_preview_media_changes($item['textblock']);
 
         if (!$target) {
-            $message = 'Overgeslagen: geen bijpassend bericht, pagina of product gevonden.';
+            $message = 'Overgeslagen: geen bijpassend ondersteund item gevonden.';
         } elseif (!current_user_can('edit_post', $target)) {
             $message = 'Overgeslagen: geen rechten om dit item te bewerken.';
         } else {
@@ -2708,7 +3302,7 @@ function dca_tb_bulk_preview($txt) {
                     $message = 'Overgeslagen: ' . $validation->get_error_message();
                 } else {
                     $status = $media['errors'] > 0 ? 'partial' : 'success';
-                    $message = 'Klaar om op te slaan' . ($target_method ? ' via ' . $target_method : '') . '. Tekst, samenvatting en Yoast worden overschreven. Media: ' . absint($media['found']) . ' gevonden, ' . absint($media['renames']) . ' bestandsnamen te hernoemen';
+                    $message = 'Klaar om op te slaan' . ($target_method ? ' via ' . $target_method : '') . '. Tekst en samenvatting worden verwerkt. Media: ' . absint($media['found']) . ' gevonden, ' . absint($media['renames']) . ' bestandsnamen te hernoemen';
                     if ($media['errors'] > 0) {
                         $message .= ', ' . absint($media['errors']) . ' mediafout(en). Tekst wordt wel geïmporteerd.';
                     }
@@ -2768,7 +3362,7 @@ function dca_tb_bulk_save($txt) {
                 'target_post_id' => 0,
                 'target_title'   => '',
                 'status'         => 'skipped',
-                'message'        => 'Overgeslagen: geen bijpassend bericht, pagina of product gevonden.',
+                'message'        => 'Overgeslagen: geen bijpassend ondersteund item gevonden.',
             ];
             continue;
         }
@@ -3139,8 +3733,8 @@ function dca_tb_current_user_can_use_manager() {
     /**
      * Filters the capability required to use the Content Sync Manager.
      *
-     * Defaults to manage_options because the plugin can bulk overwrite content,
-     * SEO metadata and media metadata. Agencies can relax this deliberately per site.
+     * Defaults to manage_options because the plugin can bulk overwrite content
+     * and media metadata. Agencies can relax this deliberately per site.
      *
      * @param string $capability Required capability.
      */
@@ -3315,6 +3909,32 @@ add_action('wp_ajax_dca_bulk_get_acf_textblocks', function () {
     ]);
 });
 
+add_action('wp_ajax_dca_export_seo_points', function () {
+    dca_tb_require_ajax_access();
+
+    $post_ids = dca_tb_post_id_list('post_ids');
+
+    if (!$post_ids) {
+        wp_send_json_error(['message' => 'Selecteer eerst één of meerdere items.']);
+    }
+
+    if (count($post_ids) > DCA_TB_MAX_IMPORT_PAGES) {
+        wp_send_json_error(['message' => 'SEO-problemenexport bevat ' . count($post_ids) . ' items. Maximaal toegestaan: ' . absint(DCA_TB_MAX_IMPORT_PAGES) . '.']);
+    }
+
+    $text = dca_tb_build_seo_points_export($post_ids);
+
+    if (is_wp_error($text)) {
+        wp_send_json_error(['message' => $text->get_error_message()]);
+    }
+
+    wp_send_json_success([
+        'text'     => $text,
+        'filename' => 'Yoast.txt',
+    ]);
+});
+
+
 add_action('wp_ajax_dca_txt_import_preview', function () {
     dca_tb_require_ajax_access();
 
@@ -3429,6 +4049,25 @@ function dca_tb_should_load_admin_ui($hook_suffix = '') {
         && $screen->base === 'edit'
         && dca_tb_is_supported_post_type($screen->post_type);
 }
+
+function dca_tb_admin_body_class($classes) {
+    if (!dca_tb_should_load_admin_ui('edit.php') || !dca_tb_current_user_can_use_manager()) {
+        return $classes;
+    }
+
+    $class = 'dca-tb-list-screen';
+
+    if (is_string($classes)) {
+        return trim($classes . ' ' . $class);
+    }
+
+    if (is_array($classes)) {
+        $classes[] = $class;
+    }
+
+    return $classes;
+}
+add_filter('admin_body_class', 'dca_tb_admin_body_class');
 
 function dca_tb_get_admin_asset_settings() {
     $screen = get_current_screen();
@@ -3561,7 +4200,7 @@ add_action('admin_footer-edit.php', function () {
                     <button type="button" class="button dca-close-import">Sluiten</button>
                 </div>
                 <div class="dca-content">
-                    <p class="dca-warning">Gebruik een TXT-bestand dat via “Exporteer als .txt” is gemaakt. Controleer het bestand verplicht vóór import. Berichten, pagina’s en producten met een standaardtemplate worden verwerkt; Elementor Canvas en Elementor Full Width worden overgeslagen. Import kan content, Yoast-data, ACF-data, media metadata en fysieke mediabestandsnamen wijzigen.</p>
+                    <p class="dca-warning">Gebruik een TXT-bestand dat via “Exporteer als .txt” is gemaakt. Controleer het bestand verplicht vóór import. Berichten, pagina’s en producten met een standaardtemplate worden verwerkt; Elementor Canvas en Elementor Full Width worden overgeslagen. Import kan content, ACF-data, media metadata en fysieke mediabestandsnamen wijzigen. SEO-problemen exporteer je apart; de contentimport schrijft geen SEO-meta.</p>
                     <input type="file" id="dca-import-file" accept=".txt,text/plain">
                     <div class="dca-actions">
                         <button type="button" class="button" id="dca-import-preview">Controleer bestand</button>

@@ -1,20 +1,20 @@
 === Content Sync Manager ===
 Contributors: webactueel
-Tags: admin, acf, yoast, import
+Tags: admin, acf, yoast, rank-math, import
 Requires at least: 6.2
 Tested up to: 6.2
 Requires PHP: 7.4
-Stable tag: 1.2.35
+Stable tag: 1.2.51
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
-Admin-only TXT import/export voor gedetecteerde ACF-velden, Yoast SEO en media-metadata.
+Admin-only TXT import/export voor content en aparte SEO-problemenexport voor Yoast/Rank Math.
 
 == Description ==
 
 Deze plugin draait alleen in de WordPress-admin en voert geen externe tracking, externe asset-loading of externe API-calls uit.
 
-Deze private plugin voegt een compacte admin bulkeditor toe voor pagina's, berichten en producten. De plugin is bedoeld voor gecontroleerde staging-imports en detecteert bestaande ACF-velden per pagina/product en werkt met Yoast meta en lokale WordPress-afbeeldingen.
+Deze private plugin voegt een compacte admin bulkeditor toe voor pagina's, berichten, producten en ondersteunde custom post types. De plugin is bedoeld voor gecontroleerde staging-imports en detecteert bestaande ACF-velden per item en werkt met lokale WordPress-afbeeldingen. Yoast/Rank Math SEO-problemen kunnen los worden geëxporteerd.
 
 == Installation ==
 
@@ -24,6 +24,69 @@ Deze private plugin voegt een compacte admin bulkeditor toe voor pagina's, beric
 4. Test eerst export, preview en daarna import.
 
 == Changelog ==
+
+= 1.2.51 =
+* UI-fix: filterrij en paginering gebruiken nu dezelfde volledige rijbreedte, zodat de rechterkant niet meer verspringt door tablenav-uitlijning.
+
+= 1.2.50 =
+* UI-fix: rechterzijde van de top-tablenav strakker uitgelijnd; filterknop en paginering gebruiken vaste control-hoogtes en dezelfde rechterrand.
+
+= 1.2.49 =
+* Wijziging: SEO-problemenexport gebruikt voortaan vaste bestandsnaam Yoast.txt.
+
+= 1.2.48 =
+* Wijziging: SEO-knop exporteert nu een compact SEO-problemenrapport per pagina: paginanaam met bulletpoints.
+* Behoud: normale contentexport en contentimport blijven gescheiden van SEO-meta.
+
+= 1.2.47 =
+* Fix: via dca_tb_supported_post_types toegevoegde custom post types krijgen nu dezelfde Contentblok-kolom als pagina’s, berichten en producten.
+* Fix: contentexport voegt het post type toe aan de TXT-header en import accepteert dynamische itemlabels, zodat ondersteunde custom post types niet naar pagina’s terugvallen.
+
+= 1.2.46 =
+* UI-fix: filterrij gebruikt de volledige beschikbare breedte en de tekst “van 2” in de paginering krijgt extra tussenruimte.
+
+= 1.2.45 =
+* UI-fix: paginering blijft onder de filterrij en staat rechts uitgelijnd, zonder overlap met de filterknop.
+* Technisch: top-tablenav gebruikt weer een twee-regelige flex-layout: filters boven, itemtelling/paginering onder rechts.
+
+= 1.2.44 =
+* UI-fix: paginering rechts uitgelijnd onder filters.
+
+= 1.2.43 =
+* UI-fix: itemtelling en paginering verder uitgelijnd; pagingtekst verticaal gecentreerd.
+
+= 1.2.42 =
+* UI-fix: lijstfilters gebruiken geen horizontale scrollbar meer. Op brede schermen blijven bulkactie en filters compact; op smallere adminbreedtes breken filters netjes om.
+* Technisch: de vorige overflow-oplossing is vervangen door een CSS-grid/flex-combinatie zonder geforceerde horizontale scroll.
+
+= 1.2.41 =
+* UI-fix: bulkacties, filters en paginering in de overzichtslijst worden op desktop compacter weergegeven.
+* Technisch: lijstscherm-CSS gebruikt een plugin-eigen admin body class, zodat pagina's, berichten, producten en via filter toegevoegde post types hetzelfde gedrag krijgen.
+
+= 1.2.40 =
+* UI: label "Content Sync:" uit de vaste admin-toolbar verwijderd; de knoppen blijven ongewijzigd.
+* UI: single-item modal toont nu direct de paginatitel zonder Content Sync-prefix.
+
+= 1.2.39 =
+* Wijziging: knop en rapport hernoemd naar Export SEO-meta & scores, zodat duidelijk is dat het om opgeslagen SEO-meta en score-snapshots gaat.
+* Fix: ongebruikte SEO-importwrite-logica verwijderd uit de actieve workflow; contentimport schrijft geen Yoast/Rank Math postmeta.
+* Verbetering: ondersteunde post types zijn uitbreidbaar via filter dca_tb_supported_post_types.
+* Verbetering: SEO-export bevat nu expliciet post type en titel per item en meldt wanneer geen SEO-provider/meta gevonden is.
+
+= 1.2.38 =
+* Feature: aparte knop Export SEO-punten toegevoegd voor geselecteerde pagina’s, berichten en producten.
+* Wijziging: normale contentexport bevat standaard geen SEO META-blok meer.
+* Wijziging: normale contentimport schrijft standaard geen Yoast/Rank Math SEO-meta meer terug.
+* Behoud: oude TXT-bestanden met SEO META of YOAST SEO worden nog wel gevalideerd zodat dubbele/ongeldige secties zichtbaar blijven.
+
+= 1.2.37 =
+* Feature: nieuw SEO META-blok voor Yoast en Rank Math met provider, SEO title, meta description, focus keyphrase, canonical, robots, social velden en score-snapshots.
+* Backwards compatibility: oude exports met YOAST SEO blijven importeerbaar.
+* Import: SEO-velden worden naar de actieve provider gemapt; bij Yoast én Rank Math tegelijk wordt de import geblokkeerd tenzij de exportprovider eenduidig is.
+
+= 1.2.36 =
+* Fix: importmatch op ID accepteert een leeg URL-veld niet meer wanneer de titel afwijkt.
+* Packaging: release-ZIP gebruikt opnieuw de runtime-map `content-sync-manager`.
 
 = 1.2.35 =
 * Media-rename aangescherpt: veld "Nieuwe bestandsnaam" wijzigt alleen de naam voor de bestaande extensie. Subsize-URL-vervangingen worden meegenomen na hernoemen.

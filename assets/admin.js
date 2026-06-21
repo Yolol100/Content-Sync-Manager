@@ -11,19 +11,16 @@ document.addEventListener('DOMContentLoaded',function(){
             function ensureToolbar(){
                 if(!nonce)return;
                 const existing=document.querySelector('.dca-toolbar');
-                if(existing && document.querySelector('#dca-copy-selected') && document.querySelector('#dca-open-empty-bulk') && document.querySelector('#dca-export-selected') && document.querySelector('#dca-deselect-selected') && document.querySelector('#dca-open-import') && document.querySelector('#dca-restore-last-import')){
+                if(existing && document.querySelector('#dca-copy-selected') && document.querySelector('#dca-open-empty-bulk') && document.querySelector('#dca-export-selected') && document.querySelector('#dca-export-seo-points') && document.querySelector('#dca-deselect-selected') && document.querySelector('#dca-open-import') && document.querySelector('#dca-restore-last-import')){
                     return;
                 }
                 const bar=document.createElement('div');
                 bar.className='dca-toolbar';
-                const title=document.createElement('span');
-                title.className='dca-toolbar-title';
-                title.textContent='SEO:';
-                bar.appendChild(title);
                 [
                     ['dca-copy-selected','Kopieer','button'],
                     ['dca-open-empty-bulk','Bulkeditor','button'],
-                    ['dca-export-selected','Export .txt','button'],
+                    ['dca-export-selected','Export content .txt','button'],
+                    ['dca-export-seo-points','Export SEO-problemen','button'],
                     ['dca-deselect-selected','Deselecteer alles','button'],
                     ['dca-open-import','Import .txt','button button-primary'],
                     ['dca-restore-last-import','Herstel laatste import','button']
@@ -52,8 +49,8 @@ document.addEventListener('DOMContentLoaded',function(){
             const singleSave=$('#dca-single-save'), singleCopy=$('#dca-single-copy'), singleDownload=$('#dca-single-download'), singleClose=$('.dca-close-single');
             const bulkCheck=$('#dca-bulk-check'), bulkCopy=$('#dca-bulk-copy'), bulkDownload=$('#dca-bulk-download'), bulkClose=$('.dca-close-bulk');
             const importPreview=$('#dca-import-preview'), importClose=$('.dca-close-import');
-            const toolbarCopy=$('#dca-copy-selected'), toolbarBulk=$('#dca-open-empty-bulk'), toolbarExport=$('#dca-export-selected'), toolbarDeselect=$('#dca-deselect-selected'), toolbarImport=$('#dca-open-import'), toolbarRestore=$('#dca-restore-last-import');
-            const requiredEls=[toast,singleModal,singleOut,singleTitle,singleStatus,singleView,singleSave,singleCopy,singleDownload,singleClose,bulkModal,bulkOut,bulkStatus,bulkPreview,bulkSave,bulkCheck,bulkCopy,bulkDownload,bulkClose,importModal,importFile,importStatus,importPreviewBox,importRun,importPreview,importClose,toolbarCopy,toolbarBulk,toolbarExport,toolbarDeselect,toolbarImport,toolbarRestore];
+            const toolbarCopy=$('#dca-copy-selected'), toolbarBulk=$('#dca-open-empty-bulk'), toolbarExport=$('#dca-export-selected'), toolbarSeoExport=$('#dca-export-seo-points'), toolbarDeselect=$('#dca-deselect-selected'), toolbarImport=$('#dca-open-import'), toolbarRestore=$('#dca-restore-last-import');
+            const requiredEls=[toast,singleModal,singleOut,singleTitle,singleStatus,singleView,singleSave,singleCopy,singleDownload,singleClose,bulkModal,bulkOut,bulkStatus,bulkPreview,bulkSave,bulkCheck,bulkCopy,bulkDownload,bulkClose,importModal,importFile,importStatus,importPreviewBox,importRun,importPreview,importClose,toolbarCopy,toolbarBulk,toolbarExport,toolbarSeoExport,toolbarDeselect,toolbarImport,toolbarRestore];
             if(!nonce||!ajaxUrl||requiredEls.some(el=>!el)){
                 console.warn('Content Sync Manager: admin UI niet volledig geladen. Herlaad de adminpagina.');
                 return;
@@ -229,7 +226,7 @@ document.addEventListener('DOMContentLoaded',function(){
                 singleFilename='content-sync-'+currentPostId+'.txt';
     
                 const fill=d=>{
-                    singleTitle.textContent='Content Sync: '+d.title;
+                    singleTitle.textContent=d.title;
                     singleFilename='content-sync-'+slug(d.title)+'.txt';
                     singleOut.value=d.text;
                     singleInitial=d.text;
@@ -241,7 +238,7 @@ document.addEventListener('DOMContentLoaded',function(){
     
                 if(cache[currentPostId]){fill(cache[currentPostId]);return}
     
-                singleTitle.textContent='Content Sync';
+                singleTitle.textContent='Content ophalen';
                 singleOut.value='Tekst wordt opgehaald...';
                 singleInitial=singleOut.value;
                 open(singleModal);
@@ -262,7 +259,7 @@ document.addEventListener('DOMContentLoaded',function(){
                     this.disabled=false;
                     if(!d||!d.success){status(singleStatus,d&&d.data&&d.data.message?d.data.message:'Opslaan mislukt.','is-error');return}
                     singleInitial=singleOut.value;
-                    cache[currentPostId]={title:singleTitle.textContent.replace('Content Sync: ',''),text:singleOut.value,view_url:singleView.href};
+                    cache[currentPostId]={title:singleTitle.textContent,text:singleOut.value,view_url:singleView.href};
                     status(singleStatus,d.data.message||'Opgeslagen.','is-success');
                     reloadList('Pagina opgeslagen');
                 }).catch(()=>{this.disabled=false;status(singleStatus,'Opslaan mislukt.','is-error')});
@@ -333,6 +330,29 @@ document.addEventListener('DOMContentLoaded',function(){
                 if(!d||!d.success){alert(d&&d.data&&d.data.message?d.data.message:'Exporteren mislukt.');return}
                 download(d.data.text,d.data.filename);
             }).catch(()=>{}));
+
+            toolbarSeoExport.addEventListener('click',function(){
+                const ids=selectedIds();
+
+                if(!ids.length){
+                    showToast('SEO-problemen: 0 geselecteerd');
+                    alert('Selecteer eerst één of meerdere items voor de SEO-problemenexport.');
+                    return;
+                }
+
+                this.disabled=true;
+                showToast('SEO-problemenexport wordt gemaakt...');
+
+                ajax('dca_export_seo_points',{post_ids:ids}).then(d=>{
+                    this.disabled=false;
+                    if(!d||!d.success){alert(d&&d.data&&d.data.message?d.data.message:'SEO-problemen exporteren mislukt.');return}
+                    download(d.data.text,d.data.filename);
+                    showToast('SEO-problemenexport gedownload.');
+                }).catch(()=>{
+                    this.disabled=false;
+                    showToast('SEO-problemen exporteren mislukt.');
+                });
+            });
     
             bulkCheck.addEventListener('click',function(){
                 if(!bulkOut.value.trim()){status(bulkStatus,'Er staat geen tekst om te controleren.','is-error');return}
@@ -361,7 +381,7 @@ document.addEventListener('DOMContentLoaded',function(){
     
             bulkSave.addEventListener('click',function(){
                 if(!bulkChecked||!bulkPreviewHash){status(bulkStatus,'Controleer eerst exact deze bulktekst opnieuw.','is-error');return}
-                if(!confirm('Weet je zeker dat je deze gecontroleerde bulk-tekst wilt opslaan? Geldige items kunnen bestaande content, SEO-, ACF- en media-data wijzigen. Items met fouten worden overgeslagen. Per geïmporteerd item wordt automatisch eerst een back-up gemaakt.'))return;
+                if(!confirm('Weet je zeker dat je deze gecontroleerde bulk-tekst wilt opslaan? Geldige items kunnen bestaande content, ACF- en media-data wijzigen. Items met fouten worden overgeslagen. Per geïmporteerd item wordt automatisch eerst een back-up gemaakt.'))return;
     
                 this.disabled=true;
                 status(bulkStatus,'Back-ups maken en bulk opslaan...','');
@@ -440,7 +460,7 @@ document.addEventListener('DOMContentLoaded',function(){
     
             importRun.addEventListener('click',function(){
                 if(!importOk||!importTxt||!importPreviewHash){status(importStatus,'Controleer eerst exact dit bestand opnieuw.','is-error');return}
-                if(!confirm('Weet je zeker dat je dit gecontroleerde TXT-bestand wilt importeren? Geldige items kunnen bestaande content, SEO-, ACF- en media-data wijzigen. Items met fouten worden overgeslagen. Per geïmporteerd item wordt automatisch eerst een back-up gemaakt.'))return;
+                if(!confirm('Weet je zeker dat je dit gecontroleerde TXT-bestand wilt importeren? Geldige items kunnen bestaande content, ACF- en media-data wijzigen. Items met fouten worden overgeslagen. Per geïmporteerd item wordt automatisch eerst een back-up gemaakt.'))return;
     
                 this.disabled=true;
                 status(importStatus,'Back-ups maken en importeren...','');
