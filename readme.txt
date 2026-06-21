@@ -1,20 +1,20 @@
 === Content Sync Manager ===
 Contributors: webactueel
-Tags: admin, acf, yoast, rank-math, import
+Tags: admin, acf, import, export
 Requires at least: 6.2
 Tested up to: 6.2
 Requires PHP: 7.4
-Stable tag: 1.2.51
+Stable tag: 1.2.52
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
-Admin-only TXT import/export voor content en aparte SEO-problemenexport voor Yoast/Rank Math.
+Admin-only TXT import/export voor content, ACF-velden, samenvattingen, uitgelichte afbeeldingen en media-metadata.
 
 == Description ==
 
 Deze plugin draait alleen in de WordPress-admin en voert geen externe tracking, externe asset-loading of externe API-calls uit.
 
-Deze private plugin voegt een compacte admin bulkeditor toe voor pagina's, berichten, producten en ondersteunde custom post types. De plugin is bedoeld voor gecontroleerde staging-imports en detecteert bestaande ACF-velden per item en werkt met lokale WordPress-afbeeldingen. Yoast/Rank Math SEO-problemen kunnen los worden geëxporteerd.
+Deze private plugin voegt een compacte admin bulkeditor toe voor pagina's, berichten, producten en ondersteunde custom post types. De plugin is bedoeld voor gecontroleerde staging-imports en detecteert bestaande ACF-velden per item en werkt met lokale WordPress-afbeeldingen.
 
 == Installation ==
 
@@ -25,6 +25,10 @@ Deze private plugin voegt een compacte admin bulkeditor toe voor pagina's, beric
 
 == Changelog ==
 
+= 1.2.52 =
+* Wijziging: knop Export SEO-problemen, de bijbehorende AJAX-route en de SEO-problemenexport naar Yoast.txt verwijderd.
+* Fix: admin-JavaScript verwacht deze knop niet meer, zodat de toolbar blijft laden zonder SEO-exportknop.
+
 = 1.2.51 =
 * UI-fix: filterrij en paginering gebruiken nu dezelfde volledige rijbreedte, zodat de rechterkant niet meer verspringt door tablenav-uitlijning.
 
@@ -32,10 +36,8 @@ Deze private plugin voegt een compacte admin bulkeditor toe voor pagina's, beric
 * UI-fix: rechterzijde van de top-tablenav strakker uitgelijnd; filterknop en paginering gebruiken vaste control-hoogtes en dezelfde rechterrand.
 
 = 1.2.49 =
-* Wijziging: SEO-problemenexport gebruikt voortaan vaste bestandsnaam Yoast.txt.
 
 = 1.2.48 =
-* Wijziging: SEO-knop exporteert nu een compact SEO-problemenrapport per pagina: paginanaam met bulletpoints.
 * Behoud: normale contentexport en contentimport blijven gescheiden van SEO-meta.
 
 = 1.2.47 =
@@ -74,7 +76,6 @@ Deze private plugin voegt een compacte admin bulkeditor toe voor pagina's, beric
 * Verbetering: SEO-export bevat nu expliciet post type en titel per item en meldt wanneer geen SEO-provider/meta gevonden is.
 
 = 1.2.38 =
-* Feature: aparte knop Export SEO-punten toegevoegd voor geselecteerde pagina’s, berichten en producten.
 * Wijziging: normale contentexport bevat standaard geen SEO META-blok meer.
 * Wijziging: normale contentimport schrijft standaard geen Yoast/Rank Math SEO-meta meer terug.
 * Behoud: oude TXT-bestanden met SEO META of YOAST SEO worden nog wel gevalideerd zodat dubbele/ongeldige secties zichtbaar blijven.

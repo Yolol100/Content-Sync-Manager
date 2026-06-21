@@ -1,6 +1,6 @@
 # Content Sync Manager
 
-Admin-only mini-plugin voor TXT export/import van berichten, pagina’s, producten en ondersteunde custom post types met gedetecteerde ACF-velden, samenvattingen, uitgelichte afbeeldingen en media-metadata. Yoast/Rank Math SEO-problemen worden apart als rapport geëxporteerd.
+Admin-only mini-plugin voor TXT export/import van berichten, pagina’s, producten en ondersteunde custom post types met gedetecteerde ACF-velden, samenvattingen, uitgelichte afbeeldingen en media-metadata.
 
 ## Installatie
 
@@ -22,7 +22,6 @@ Admin-only mini-plugin voor TXT export/import van berichten, pagina’s, product
 - WordPress 6.2+
 - PHP 7.4+
 - ACF voor pagina-, product- en custom-post-typevelden wanneer die via ACF worden beheerd
-- Yoast SEO of Rank Math optioneel voor de aparte SEO-problemenexport
 
 Wanneer ACF niet actief of niet volledig beschikbaar is, toont de plugin in de pagina-/productlijst een admin-waarschuwing. Imports met ACF-velden worden dan server-side geblokkeerd; berichtimports zonder ACF blijven bruikbaar.
 
@@ -50,9 +49,13 @@ Zet oude Code Snippets/WPCode-versies of oude pluginvarianten eerst uit voordat 
 
 ## Versie
 
-1.2.51
+1.2.52
 
 ## Changelog
+
+### 1.2.52
+- Wijziging: knop `Export SEO-problemen`, de bijbehorende AJAX-route en de SEO-problemenexport naar `Yoast.txt` verwijderd.
+- Fix: admin-JavaScript verwacht deze knop niet meer, zodat de toolbar blijft laden zonder SEO-exportknop.
 
 ### 1.2.51
 - UI-fix: filterrij en paginering gebruiken nu dezelfde volledige rijbreedte, zodat de rechterkant niet meer verspringt door tablenav-uitlijning.
@@ -61,11 +64,9 @@ Zet oude Code Snippets/WPCode-versies of oude pluginvarianten eerst uit voordat 
 - UI-fix: rechterzijde van de top-tablenav strakker uitgelijnd; filterknop en paginering gebruiken vaste control-hoogtes en dezelfde rechterrand.
 
 ### 1.2.49
-- Wijziging: SEO-problemenexport gebruikt voortaan vaste bestandsnaam `Yoast.txt`.
 
 ### 1.2.48
 
-- Wijziging: SEO-knop exporteert nu een compact SEO-problemenrapport per pagina: paginanaam met bulletpoints.
 - Behoud: normale contentexport en contentimport blijven gescheiden van SEO-meta.
 
 ### 1.2.47
@@ -111,7 +112,6 @@ Zet oude Code Snippets/WPCode-versies of oude pluginvarianten eerst uit voordat 
 - Verbetering: SEO-export bevat nu expliciet post type en titel per item en meldt wanneer geen SEO-provider/meta gevonden is.
 
 ### 1.2.38
-- Feature: aparte knop `Export SEO-punten` toegevoegd voor geselecteerde pagina’s, berichten en producten.
 - Wijziging: normale contentexport bevat standaard geen `SEO META`-blok meer.
 - Wijziging: normale contentimport schrijft standaard geen Yoast/Rank Math SEO-meta meer terug.
 - Behoud: oude TXT-bestanden met `SEO META` of `YOAST SEO` worden nog wel gevalideerd zodat dubbele/ongeldige secties zichtbaar blijven.

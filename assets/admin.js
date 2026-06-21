@@ -11,7 +11,7 @@ document.addEventListener('DOMContentLoaded',function(){
             function ensureToolbar(){
                 if(!nonce)return;
                 const existing=document.querySelector('.dca-toolbar');
-                if(existing && document.querySelector('#dca-copy-selected') && document.querySelector('#dca-open-empty-bulk') && document.querySelector('#dca-export-selected') && document.querySelector('#dca-export-seo-points') && document.querySelector('#dca-deselect-selected') && document.querySelector('#dca-open-import') && document.querySelector('#dca-restore-last-import')){
+                if(existing && document.querySelector('#dca-copy-selected') && document.querySelector('#dca-open-empty-bulk') && document.querySelector('#dca-export-selected') && document.querySelector('#dca-deselect-selected') && document.querySelector('#dca-open-import') && document.querySelector('#dca-restore-last-import')){
                     return;
                 }
                 const bar=document.createElement('div');
@@ -20,7 +20,6 @@ document.addEventListener('DOMContentLoaded',function(){
                     ['dca-copy-selected','Kopieer','button'],
                     ['dca-open-empty-bulk','Bulkeditor','button'],
                     ['dca-export-selected','Export content .txt','button'],
-                    ['dca-export-seo-points','Export SEO-problemen','button'],
                     ['dca-deselect-selected','Deselecteer alles','button'],
                     ['dca-open-import','Import .txt','button button-primary'],
                     ['dca-restore-last-import','Herstel laatste import','button']
@@ -49,8 +48,8 @@ document.addEventListener('DOMContentLoaded',function(){
             const singleSave=$('#dca-single-save'), singleCopy=$('#dca-single-copy'), singleDownload=$('#dca-single-download'), singleClose=$('.dca-close-single');
             const bulkCheck=$('#dca-bulk-check'), bulkCopy=$('#dca-bulk-copy'), bulkDownload=$('#dca-bulk-download'), bulkClose=$('.dca-close-bulk');
             const importPreview=$('#dca-import-preview'), importClose=$('.dca-close-import');
-            const toolbarCopy=$('#dca-copy-selected'), toolbarBulk=$('#dca-open-empty-bulk'), toolbarExport=$('#dca-export-selected'), toolbarSeoExport=$('#dca-export-seo-points'), toolbarDeselect=$('#dca-deselect-selected'), toolbarImport=$('#dca-open-import'), toolbarRestore=$('#dca-restore-last-import');
-            const requiredEls=[toast,singleModal,singleOut,singleTitle,singleStatus,singleView,singleSave,singleCopy,singleDownload,singleClose,bulkModal,bulkOut,bulkStatus,bulkPreview,bulkSave,bulkCheck,bulkCopy,bulkDownload,bulkClose,importModal,importFile,importStatus,importPreviewBox,importRun,importPreview,importClose,toolbarCopy,toolbarBulk,toolbarExport,toolbarSeoExport,toolbarDeselect,toolbarImport,toolbarRestore];
+            const toolbarCopy=$('#dca-copy-selected'), toolbarBulk=$('#dca-open-empty-bulk'), toolbarExport=$('#dca-export-selected'), toolbarDeselect=$('#dca-deselect-selected'), toolbarImport=$('#dca-open-import'), toolbarRestore=$('#dca-restore-last-import');
+            const requiredEls=[toast,singleModal,singleOut,singleTitle,singleStatus,singleView,singleSave,singleCopy,singleDownload,singleClose,bulkModal,bulkOut,bulkStatus,bulkPreview,bulkSave,bulkCheck,bulkCopy,bulkDownload,bulkClose,importModal,importFile,importStatus,importPreviewBox,importRun,importPreview,importClose,toolbarCopy,toolbarBulk,toolbarExport,toolbarDeselect,toolbarImport,toolbarRestore];
             if(!nonce||!ajaxUrl||requiredEls.some(el=>!el)){
                 console.warn('Content Sync Manager: admin UI niet volledig geladen. Herlaad de adminpagina.');
                 return;
@@ -330,29 +329,6 @@ document.addEventListener('DOMContentLoaded',function(){
                 if(!d||!d.success){alert(d&&d.data&&d.data.message?d.data.message:'Exporteren mislukt.');return}
                 download(d.data.text,d.data.filename);
             }).catch(()=>{}));
-
-            toolbarSeoExport.addEventListener('click',function(){
-                const ids=selectedIds();
-
-                if(!ids.length){
-                    showToast('SEO-problemen: 0 geselecteerd');
-                    alert('Selecteer eerst één of meerdere items voor de SEO-problemenexport.');
-                    return;
-                }
-
-                this.disabled=true;
-                showToast('SEO-problemenexport wordt gemaakt...');
-
-                ajax('dca_export_seo_points',{post_ids:ids}).then(d=>{
-                    this.disabled=false;
-                    if(!d||!d.success){alert(d&&d.data&&d.data.message?d.data.message:'SEO-problemen exporteren mislukt.');return}
-                    download(d.data.text,d.data.filename);
-                    showToast('SEO-problemenexport gedownload.');
-                }).catch(()=>{
-                    this.disabled=false;
-                    showToast('SEO-problemen exporteren mislukt.');
-                });
-            });
     
             bulkCheck.addEventListener('click',function(){
                 if(!bulkOut.value.trim()){status(bulkStatus,'Er staat geen tekst om te controleren.','is-error');return}

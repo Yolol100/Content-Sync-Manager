@@ -303,11 +303,6 @@ body.wp-admin.edit-php.dca-tb-list-screen {
         min-width: 150px;
     }
 
-    body.wp-admin.edit-php.dca-tb-list-screen .tablenav.top select[name="seo_filter"],
-    body.wp-admin.edit-php.dca-tb-list-screen .tablenav.top select[id*="wpseo_filter"],
-    body.wp-admin.edit-php.dca-tb-list-screen .tablenav.top select[id*="yoast"] {
-        min-width: 150px;
-    }
 
     body.wp-admin.edit-php.dca-tb-list-screen .tablenav.top select[name="readability_filter"],
     body.wp-admin.edit-php.dca-tb-list-screen .tablenav.top select[id*="readability"] {
