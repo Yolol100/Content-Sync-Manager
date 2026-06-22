@@ -49,9 +49,15 @@ Zet oude Code Snippets/WPCode-versies of oude pluginvarianten eerst uit voordat 
 
 ## Versie
 
-1.2.52
+1.2.53
 
 ## Changelog
+
+### 1.2.53
+- UI: vaste toolbar in logischere volgorde gezet: selectie-acties, bulkeditor, import, herstel en filter.
+- Fix: incomplete bestaande toolbar wordt eerst verwijderd voordat de toolbar opnieuw wordt opgebouwd.
+- Fix: adminmodalen kregen ontbrekende screen-reader labels en live statusmeldingen.
+- Fix: admin screen/post-type waarden worden veiliger genormaliseerd voordat admin-asset URLs worden opgebouwd.
 
 ### 1.2.52
 - Wijziging: knop `Export SEO-problemen`, de bijbehorende AJAX-route en de SEO-problemenexport naar `Yoast.txt` verwijderd.

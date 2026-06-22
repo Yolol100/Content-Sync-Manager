@@ -3463,10 +3463,12 @@ function dca_tb_should_load_admin_ui($hook_suffix = '') {
     }
 
     $screen = get_current_screen();
+    $post_type = ($screen && isset($screen->post_type)) ? sanitize_key((string) $screen->post_type) : '';
 
     return $screen
         && $screen->base === 'edit'
-        && dca_tb_is_supported_post_type($screen->post_type);
+        && $post_type !== ''
+        && dca_tb_is_supported_post_type($post_type);
 }
 
 function dca_tb_admin_body_class($classes) {
@@ -3490,13 +3492,14 @@ add_filter('admin_body_class', 'dca_tb_admin_body_class');
 
 function dca_tb_get_admin_asset_settings() {
     $screen = get_current_screen();
+    $post_type = ($screen && isset($screen->post_type)) ? sanitize_key((string) $screen->post_type) : 'page';
     $status_filter = dca_tb_get_list_status_filter();
     $template_filter = dca_tb_get_list_template_filter();
-    $base_url = ($screen && $screen->post_type === 'post')
+    $base_url = $post_type === 'post'
         ? admin_url('edit.php')
-        : admin_url('edit.php?post_type=' . ($screen ? $screen->post_type : 'page'));
+        : admin_url('edit.php?post_type=' . $post_type);
 
-    if ($template_filter !== '' && $screen && dca_tb_is_supported_post_type($screen->post_type)) {
+    if ($template_filter !== '' && dca_tb_is_supported_post_type($post_type)) {
         $base_url = add_query_arg('dca_tb_template', $template_filter, $base_url);
     }
 
@@ -3552,7 +3555,9 @@ add_action('admin_notices', function () {
 
     $screen = get_current_screen();
 
-    if (!$screen || $screen->base !== 'edit' || !in_array($screen->post_type, ['page', 'product'], true) || dca_tb_acf_available()) {
+    $post_type = ($screen && isset($screen->post_type)) ? sanitize_key((string) $screen->post_type) : '';
+
+    if (!$screen || $screen->base !== 'edit' || !in_array($post_type, ['page', 'product'], true) || dca_tb_acf_available()) {
         return;
     }
 
@@ -3561,11 +3566,13 @@ add_action('admin_notices', function () {
 
 add_action('admin_footer-edit.php', function () {
     $screen = get_current_screen();
+    $post_type = ($screen && isset($screen->post_type)) ? sanitize_key((string) $screen->post_type) : '';
     
     if (
         !$screen ||
         $screen->base !== 'edit' ||
-        !dca_tb_is_supported_post_type($screen->post_type) ||
+        $post_type === '' ||
+        !dca_tb_is_supported_post_type($post_type) ||
         !dca_tb_current_user_can_use_manager()
     ) {
         return;
@@ -3580,13 +3587,14 @@ add_action('admin_footer-edit.php', function () {
                     <button type="button" class="button dca-close-single">Sluiten</button>
                 </div>
                 <div class="dca-content">
+                    <label class="screen-reader-text" for="dca-single-output">Contenttekst</label>
                     <textarea class="dca-textarea" id="dca-single-output"></textarea>
                     <div class="dca-actions">
                         <button type="button" class="button button-primary" id="dca-single-save">Opslaan</button>
                         <button type="button" class="button" id="dca-single-copy">Kopieer tekst</button>
                         <button type="button" class="button" id="dca-single-download">Download .txt</button>
                         <a class="button" id="dca-single-view" href="#" target="_blank" rel="noopener">Open voorkant</a>
-                        <span class="dca-status" id="dca-single-status"></span>
+                        <span class="dca-status" id="dca-single-status" role="status" aria-live="polite"></span>
                     </div>
                 </div>
             </div>
@@ -3599,13 +3607,14 @@ add_action('admin_footer-edit.php', function () {
                     <button type="button" class="button dca-close-bulk">Sluiten</button>
                 </div>
                 <div class="dca-content">
+                    <label class="screen-reader-text" for="dca-bulk-output">Bulktekst</label>
                     <textarea class="dca-textarea" id="dca-bulk-output"></textarea>
                     <div class="dca-actions">
                         <button type="button" class="button" id="dca-bulk-check">Controleer bulktekst</button>
                         <button type="button" class="button button-primary" id="dca-bulk-save" disabled>Bulk opslaan</button>
                         <button type="button" class="button" id="dca-bulk-copy">Kopieer alles</button>
                         <button type="button" class="button" id="dca-bulk-download">Download .txt</button>
-                        <span class="dca-status" id="dca-bulk-status"></span>
+                        <span class="dca-status" id="dca-bulk-status" role="status" aria-live="polite"></span>
                     </div>
                     <div class="dca-preview" id="dca-bulk-preview"></div>
                 </div>
@@ -3620,18 +3629,19 @@ add_action('admin_footer-edit.php', function () {
                 </div>
                 <div class="dca-content">
                     <p class="dca-warning">Gebruik een TXT-bestand dat via “Exporteer als .txt” is gemaakt. Controleer het bestand verplicht vóór import. Berichten, pagina’s en producten met een standaardtemplate worden verwerkt; Elementor Canvas en Elementor Full Width worden overgeslagen. Import kan content, ACF-data, media metadata en fysieke mediabestandsnamen wijzigen. De contentimport schrijft geen SEO-meta.</p>
+                    <label class="screen-reader-text" for="dca-import-file">TXT-bestand kiezen</label>
                     <input type="file" id="dca-import-file" accept=".txt,text/plain">
                     <div class="dca-actions">
                         <button type="button" class="button" id="dca-import-preview">Controleer bestand</button>
                         <button type="button" class="button button-primary" id="dca-import-run" disabled>Importeer gecontroleerde items</button>
-                        <span class="dca-status" id="dca-import-status"></span>
+                        <span class="dca-status" id="dca-import-status" role="status" aria-live="polite"></span>
                     </div>
                     <div class="dca-preview" id="dca-import-preview-box"></div>
                 </div>
             </div>
         </div>
     
-        <div class="dca-toast" id="dca-toast"></div>
+        <div class="dca-toast" id="dca-toast" role="status" aria-live="polite" aria-atomic="true"></div>
     HTML;
     // Static admin markup only; no user-supplied values are concatenated here.
     echo $html; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped

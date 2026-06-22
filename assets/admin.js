@@ -10,20 +10,25 @@ document.addEventListener('DOMContentLoaded',function(){
 
             function ensureToolbar(){
                 if(!nonce)return;
-                const existing=document.querySelector('.dca-toolbar');
-                if(existing && document.querySelector('#dca-copy-selected') && document.querySelector('#dca-open-empty-bulk') && document.querySelector('#dca-export-selected') && document.querySelector('#dca-deselect-selected') && document.querySelector('#dca-open-import') && document.querySelector('#dca-restore-last-import')){
-                    return;
-                }
-                const bar=document.createElement('div');
-                bar.className='dca-toolbar';
-                [
-                    ['dca-copy-selected','Kopieer','button'],
+                const buttonItems=[
+                    ['dca-copy-selected','Kopieer selectie','button'],
+                    ['dca-export-selected','Export selectie .txt','button'],
                     ['dca-open-empty-bulk','Bulkeditor','button'],
-                    ['dca-export-selected','Export content .txt','button'],
                     ['dca-deselect-selected','Deselecteer alles','button'],
                     ['dca-open-import','Import .txt','button button-primary'],
                     ['dca-restore-last-import','Herstel laatste import','button']
-                ].forEach(item=>{
+                ];
+                const existing=document.querySelector('.dca-toolbar');
+                const hasAllButtons=buttonItems.every(item=>document.querySelector('#'+item[0]));
+                if(existing && hasAllButtons && existing.querySelector('a.button')){
+                    return;
+                }
+                if(existing){
+                    existing.remove();
+                }
+                const bar=document.createElement('div');
+                bar.className='dca-toolbar';
+                buttonItems.forEach(item=>{
                     const btn=document.createElement('button');
                     btn.type='button';
                     btn.id=item[0];
@@ -32,7 +37,7 @@ document.addEventListener('DOMContentLoaded',function(){
                     bar.appendChild(btn);
                 });
                 const link=document.createElement('a');
-                link.className='button';
+                link.className='button dca-toolbar-filter';
                 link.href=filterUrl||'#';
                 link.textContent=filterLabel||'Filter';
                 bar.appendChild(link);
