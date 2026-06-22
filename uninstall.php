@@ -1,10 +1,10 @@
 <?php
 /**
- * Uninstall cleanup for Content Sync Manager.
+ * Opruiming bij uninstall voor Content Sync Manager.
  *
- * Keeps per-post and per-attachment backup metadata intentionally, because it can
- * be needed to roll back imported content/media after plugin removal. Only the
- * global import log option is removed.
+ * Back-upmetadata per bericht en attachment blijft bewust staan voor rollback
+ * van geïmporteerde content/media na verwijdering van de plugin. Alleen de
+ * globale importlog-optie wordt verwijderd.
  *
  * @package ContentSyncManager
  */

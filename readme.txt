@@ -4,7 +4,7 @@ Tags: admin, acf, import, export
 Requires at least: 6.2
 Tested up to: 6.2
 Requires PHP: 7.4
-Stable tag: 1.2.53
+Stable tag: 1.2.55
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -24,6 +24,17 @@ Deze private plugin voegt een compacte admin bulkeditor toe voor pagina's, beric
 4. Test eerst export, preview en daarna import.
 
 == Changelog ==
+
+= 1.2.55 =
+* Controlefix: ongebruikte server-side preload-AJAX-route verwijderd zodat de refactorclaim klopt met de code.
+* UI-tekst: selectie-toast is netter en consistenter geformuleerd.
+* Cleanup: trailing whitespace uit includes/manager.php verwijderd.
+
+= 1.2.54 =
+* Refactor: admin-JavaScript leesbaarder gemaakt zonder nieuw buildproces of parallelle logica.
+* Fix: toolbar wordt altijd opnieuw vanuit de canonieke knopvolgorde opgebouwd.
+* Security-hardening: import-/bulkpreview wordt via DOM-nodes opgebouwd in plaats van HTML-stringopbouw met dynamische data.
+* Cleanup: ongebruikte preload-code, ongebruikte JavaScript-instelling en overbodige/Engelstalige interne comments verwijderd of opgeschoond.
 
 = 1.2.53 =
 * UI: vaste toolbar in logischere volgorde gezet: selectie-acties, bulkeditor, import, herstel en filter.

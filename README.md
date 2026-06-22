@@ -49,9 +49,20 @@ Zet oude Code Snippets/WPCode-versies of oude pluginvarianten eerst uit voordat 
 
 ## Versie
 
-1.2.53
+1.2.55
 
 ## Changelog
+
+### 1.2.55
+- Controlefix: ongebruikte server-side preload-AJAX-route verwijderd zodat de refactorclaim klopt met de code.
+- Kleine UI-tekst opgeschoond: selectie-toast is netter en consistenter geformuleerd.
+- Overbodige trailing whitespace uit `includes/manager.php` verwijderd.
+
+### 1.2.54
+- Admin-JavaScript beperkt gerefactord: betere leesbaarheid, geen extra buildstap en geen parallelle logica.
+- Toolbar wordt altijd opnieuw in de canonieke knopvolgorde opgebouwd.
+- Import-/bulkpreview gebruikt nu DOM-opbouw in plaats van HTML-stringopbouw met dynamische data.
+- Ongebruikte preload-code en overbodige/Engelstalige interne comments opgeschoond.
 
 ### 1.2.53
 - UI: vaste toolbar in logischere volgorde gezet: selectie-acties, bulkeditor, import, herstel en filter.

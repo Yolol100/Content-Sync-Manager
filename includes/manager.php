@@ -1,15 +1,11 @@
 <?php
 /**
- * Admin TXT import/export logic for content fields.
+ * Adminlogica voor TXT-import en -export van contentvelden.
  *
  * @package ContentSyncManager
  */
 
 defined('ABSPATH') || exit;
-
-/**
- * Content Sync Manager + USP + Media Rename + Compacte Bulkeditor.
- */
 
 if (!defined('DCA_TB_ALLOW_MEDIA_FILE_RENAME')) {
     define('DCA_TB_ALLOW_MEDIA_FILE_RENAME', true);
@@ -958,11 +954,7 @@ function dca_tb_collect_media_refs($post_id) {
         }
     }
 
-    /**
-     * ACF media: only walk fields ACF currently detects for this object. This
-     * keeps old/deleted field data out of export and covers nested image values
-     * in group, repeater and flexible_content structures.
-     */
+    // Loop alleen door ACF-velden die ACF op dit object detecteert.
     if (function_exists('get_field_objects')) {
         foreach (dca_tb_get_detected_acf_fields($post_id) as $field) {
             $type = isset($field['type']) ? sanitize_key($field['type']) : '';
@@ -2303,8 +2295,7 @@ function dca_tb_update_acf_value($field_name, $value, $post_id) {
         $updated = $updated || (bool) $acf_result;
     }
 
-    // Fallback: update by meta key as well. This fixes cases where ACF cannot resolve
-    // a selector by field name because the field reference meta is missing or stale.
+    // Fallback op metakey wanneer ACF een veldnaam niet meer naar een field key kan herleiden.
     $meta_result = update_post_meta($post_id, $field_name, $value);
     $updated = $updated || (bool) $meta_result;
 
@@ -2583,9 +2574,7 @@ function dca_tb_resolve_page_details($page_id, $url, $title, $expected_post_type
 
     $allowed_post_types = $expected_post_type !== '' ? [$expected_post_type] : dca_tb_supported_post_types();
 
-    // Prefer the exported ID when it still points to the same item. If the ID now
-    // points to another item, do not fail immediately: on staging/live copies IDs
-    // can drift while the URL or exact title still identifies the correct target.
+    // Gebruik de geëxporteerde ID alleen wanneer die nog bij hetzelfde item hoort.
     if ($page_id && ($post = get_post($page_id)) && in_array($post->post_type, $allowed_post_types, true)) {
         $url_matches = dca_tb_url_matches_post($url, $page_id);
         $title_matches = dca_tb_title_matches_post($title, $page_id);
@@ -2682,10 +2671,7 @@ function dca_tb_parse_bulk_file($txt) {
 
     $items = [];
 
-    // Keep the export format compatible, but make the import/check more tolerant:
-    // - labels may contain extra spaces around the colon;
-    // - blank lines around separators are allowed;
-    // - matching is case-insensitive.
+    // Accepteer kleine variaties in bestaande TXT-exports zonder het exportformaat te wijzigen.
     $pattern = '/^={10,}[^\S\n]*\n\s*([^:\n]+)\s*:\s*(.*?)\n\s*URL\s*:\s*(.*?)\n\s*ID\s*:\s*(\d+)\s*\n(?:\s*Post type\s*:\s*([a-z0-9_-]+)\s*\n)?={10,}[^\S\n]*(?:\n)+(.*?)(?=^={10,}[^\S\n]*\n\s*[^:\n]+\s*:|\z)/ims';
 
     if (preg_match_all($pattern, $txt, $matches, PREG_SET_ORDER)) {
@@ -3176,12 +3162,12 @@ function dca_tb_post_id_list($key) {
 
 function dca_tb_current_user_can_use_manager() {
     /**
-     * Filters the capability required to use the Content Sync Manager.
+     * Filtert de capability die nodig is om Content Sync Manager te gebruiken.
      *
-     * Defaults to manage_options because the plugin can bulk overwrite content
-     * and media metadata. Agencies can relax this deliberately per site.
+     * Standaard is manage_options nodig omdat de plugin bulkgewijs content
+     * en media-metadata kan overschrijven.
      *
-     * @param string $capability Required capability.
+     * @param string $capability Vereiste capability.
      */
     $capability = apply_filters('dca_tb_manager_capability', 'manage_options');
 
@@ -3274,32 +3260,6 @@ add_action('wp_ajax_dca_get_acf_textblock', function () {
         'text'     => dca_tb_build_textblock($post_id),
         'view_url' => get_permalink($post_id),
     ]);
-});
-
-add_action('wp_ajax_dca_preload_acf_textblocks', function () {
-    dca_tb_require_ajax_access();
-
-    $post_ids = dca_tb_post_id_list('post_ids');
-
-    if (count($post_ids) > DCA_TB_MAX_IMPORT_PAGES) {
-        $post_ids = array_slice($post_ids, 0, DCA_TB_MAX_IMPORT_PAGES);
-    }
-
-    $items = [];
-
-    foreach ($post_ids as $post_id) {
-        $post = get_post($post_id);
-
-        if ($post && dca_tb_is_supported_post_type($post->post_type) && current_user_can('edit_post', $post_id)) {
-            $items[$post_id] = [
-                'title'    => get_the_title($post_id),
-                'text'     => dca_tb_build_textblock($post_id),
-                'view_url' => get_permalink($post_id),
-            ];
-        }
-    }
-
-    wp_send_json_success(['items' => $items]);
 });
 
 add_action('wp_ajax_dca_save_acf_textblock', function () {
@@ -3509,7 +3469,6 @@ function dca_tb_get_admin_asset_settings() {
     return [
         'nonce'       => wp_create_nonce('dca_acf_textblock_nonce'),
         'filterUrl'   => esc_url_raw($filter_url),
-        'notDoneUrl'  => esc_url_raw($not_done_url),
         'filterLabel' => $status_filter === 'not_done' ? 'Toon alles' : 'Verberg vandaag bijgewerkt',
         'ajaxUrl'        => admin_url('admin-ajax.php'),
         'maxImportBytes' => DCA_TB_MAX_IMPORT_BYTES,
@@ -3567,7 +3526,7 @@ add_action('admin_notices', function () {
 add_action('admin_footer-edit.php', function () {
     $screen = get_current_screen();
     $post_type = ($screen && isset($screen->post_type)) ? sanitize_key((string) $screen->post_type) : '';
-    
+
     if (
         !$screen ||
         $screen->base !== 'edit' ||
@@ -3577,7 +3536,7 @@ add_action('admin_footer-edit.php', function () {
     ) {
         return;
     }
-    
+
 
     $html = <<<'HTML'
     <div class="dca-modal" id="dca-single-modal" role="dialog" aria-modal="true" aria-labelledby="dca-single-title" aria-hidden="true">
@@ -3599,7 +3558,7 @@ add_action('admin_footer-edit.php', function () {
                 </div>
             </div>
         </div>
-    
+
         <div class="dca-modal" id="dca-bulk-modal" role="dialog" aria-modal="true" aria-labelledby="dca-bulk-title" aria-hidden="true">
             <div class="dca-box">
                 <div class="dca-head">
@@ -3620,7 +3579,7 @@ add_action('admin_footer-edit.php', function () {
                 </div>
             </div>
         </div>
-    
+
         <div class="dca-modal" id="dca-import-modal" role="dialog" aria-modal="true" aria-labelledby="dca-import-title" aria-hidden="true">
             <div class="dca-box">
                 <div class="dca-head">
@@ -3640,9 +3599,8 @@ add_action('admin_footer-edit.php', function () {
                 </div>
             </div>
         </div>
-    
+
         <div class="dca-toast" id="dca-toast" role="status" aria-live="polite" aria-atomic="true"></div>
     HTML;
-    // Static admin markup only; no user-supplied values are concatenated here.
     echo $html; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
 });
