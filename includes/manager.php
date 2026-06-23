@@ -87,6 +87,38 @@ function dca_tb_is_supported_post_type($post_type) {
     return in_array(sanitize_key((string) $post_type), dca_tb_supported_post_types(), true);
 }
 
+function dca_tb_supported_taxonomies() {
+    $defaults = ['category'];
+
+    if (taxonomy_exists('product_cat')) {
+        $defaults[] = 'product_cat';
+    }
+
+    $taxonomies = apply_filters('dca_tb_supported_taxonomies', $defaults);
+
+    if (!is_array($taxonomies)) {
+        $taxonomies = $defaults;
+    }
+
+    $taxonomies = array_values(array_unique(array_filter(array_map('sanitize_key', $taxonomies))));
+
+    return array_values(array_filter($taxonomies, static function ($taxonomy) use ($defaults) {
+        return in_array($taxonomy, $defaults, true) || taxonomy_exists($taxonomy);
+    }));
+}
+
+function dca_tb_is_supported_taxonomy($taxonomy) {
+    return in_array(sanitize_key((string) $taxonomy), dca_tb_supported_taxonomies(), true);
+}
+
+function dca_tb_get_admin_taxonomy() {
+    if (!empty($_GET['taxonomy'])) {
+        return sanitize_key(wp_unslash($_GET['taxonomy']));
+    }
+
+    return '';
+}
+
 function dca_tb_get_admin_post_type() {
     global $typenow;
 
@@ -138,6 +170,39 @@ function dca_tb_post_type_label_plural($post_type) {
     $object = $post_type ? get_post_type_object($post_type) : null;
 
     return $object && !empty($object->labels->name) ? strtolower(dca_tb_clean_text($object->labels->name)) : 'items';
+}
+
+function dca_tb_taxonomy_label_single($taxonomy) {
+    $taxonomy = sanitize_key((string) $taxonomy);
+
+    if ($taxonomy === 'category') {
+        return 'CATEGORIE';
+    }
+
+    if ($taxonomy === 'product_cat') {
+        return 'PRODUCTCATEGORIE';
+    }
+
+    $object = $taxonomy ? get_taxonomy($taxonomy) : null;
+    $label = $object && !empty($object->labels->singular_name) ? $object->labels->singular_name : $taxonomy;
+
+    return strtoupper(dca_tb_clean_text($label));
+}
+
+function dca_tb_taxonomy_label_plural($taxonomy) {
+    $taxonomy = sanitize_key((string) $taxonomy);
+
+    if ($taxonomy === 'category') {
+        return 'categorieën';
+    }
+
+    if ($taxonomy === 'product_cat') {
+        return 'productcategorieën';
+    }
+
+    $object = $taxonomy ? get_taxonomy($taxonomy) : null;
+
+    return $object && !empty($object->labels->name) ? strtolower(dca_tb_clean_text($object->labels->name)) : 'termen';
 }
 
 function dca_tb_text($value) {
@@ -444,6 +509,60 @@ function dca_tb_register_textblock_columns() {
 }
 add_action('admin_init', 'dca_tb_register_textblock_columns');
 
+function dca_tb_add_term_textblock_column($columns) {
+    $new = [];
+
+    foreach ($columns as $key => $label) {
+        $new[$key] = $label;
+
+        if ($key === 'name') {
+            $new['dca_acf_textblock'] = __('Content Sync', 'content-sync-manager');
+        }
+    }
+
+    if (!isset($new['dca_acf_textblock'])) {
+        $new['dca_acf_textblock'] = __('Content Sync', 'content-sync-manager');
+    }
+
+    return $new;
+}
+
+function dca_tb_render_term_textblock_column($content, $column, $term_id) {
+    if ($column !== 'dca_acf_textblock') {
+        return $content;
+    }
+
+    $taxonomy = dca_tb_get_admin_taxonomy();
+
+    if (!dca_tb_can_edit_term($term_id, $taxonomy)) {
+        return '<span aria-hidden="true">—</span>';
+    }
+
+    return sprintf(
+        '<button type="button" class="button button-small dca-open-acf-textblock" data-object-type="term" data-term-id="%d" data-taxonomy="%s">%s</button><br>%s',
+        absint($term_id),
+        esc_attr($taxonomy),
+        esc_html__('Tekst bewerken', 'content-sync-manager'),
+        dca_tb_term_update_badge($term_id, $taxonomy)
+    );
+}
+
+function dca_tb_register_term_textblock_columns() {
+    static $registered = false;
+
+    if ($registered || !is_admin()) {
+        return;
+    }
+
+    $registered = true;
+
+    foreach (dca_tb_supported_taxonomies() as $taxonomy) {
+        add_filter('manage_edit-' . $taxonomy . '_columns', 'dca_tb_add_term_textblock_column');
+        add_filter('manage_' . $taxonomy . '_custom_column', 'dca_tb_render_term_textblock_column', 10, 3);
+    }
+}
+add_action('admin_init', 'dca_tb_register_term_textblock_columns');
+
 function dca_tb_update_badge($post_id) {
     $time = absint(get_post_meta($post_id, '_dca_acf_textblock_updated_at', true));
 
@@ -454,6 +573,34 @@ function dca_tb_update_badge($post_id) {
     $today_start = dca_tb_today_start_timestamp();
     $class = $time >= $today_start ? 'dca-badge-updated' : 'dca-badge-muted';
     $user_id = absint(get_post_meta($post_id, '_dca_acf_textblock_updated_by', true));
+    $user = $user_id ? get_userdata($user_id) : null;
+    $title = 'Laatst bijgewerkt op ' . date_i18n('d-m-Y H:i', $time) . ($user ? ' door ' . $user->display_name : '');
+
+    return sprintf(
+        '<span class="dca-badge %s" title="%s">%s</span>',
+        esc_attr($class),
+        esc_attr($title),
+        esc_html(date_i18n('d-m-Y', $time))
+    );
+}
+
+function dca_tb_term_update_badge($term_id, $taxonomy) {
+    $term_id = absint($term_id);
+    $taxonomy = sanitize_key((string) $taxonomy);
+
+    if (!$term_id || !dca_tb_is_supported_taxonomy($taxonomy)) {
+        return '<span class="dca-badge dca-badge-muted">Niet ondersteund</span>';
+    }
+
+    $time = absint(get_term_meta($term_id, '_dca_acf_textblock_updated_at', true));
+
+    if (!$time) {
+        return '<span class="dca-badge dca-badge-not-updated">Geen datum</span>';
+    }
+
+    $today_start = dca_tb_today_start_timestamp();
+    $class = $time >= $today_start ? 'dca-badge-updated' : 'dca-badge-muted';
+    $user_id = absint(get_term_meta($term_id, '_dca_acf_textblock_updated_by', true));
     $user = $user_id ? get_userdata($user_id) : null;
     $title = 'Laatst bijgewerkt op ' . date_i18n('d-m-Y H:i', $time) . ($user ? ' door ' . $user->display_name : '');
 
@@ -836,20 +983,300 @@ function dca_tb_validate_seo_meta_block($textblock, $required = false) {
     $yoast_count = dca_tb_marker_count($textblock, 'YOAST SEO');
 
     if ($seo_meta_count > 1) {
-        return new WP_Error('dca_duplicate_seo_meta', 'Opslaan gestopt: de kop "SEO META" komt meerdere keren voor. SEO-meta wordt niet geïmporteerd; verwijder dubbele SEO-secties uit het TXT-bestand.');
+        return new WP_Error('dca_duplicate_seo_meta', 'Opslaan gestopt: de kop "SEO META" komt meerdere keren voor. verwijder dubbele SEO-secties uit het TXT-bestand.');
     }
 
     if ($yoast_count > 1) {
-        return new WP_Error('dca_duplicate_yoast', 'Opslaan gestopt: de kop "YOAST SEO" komt meerdere keren voor. SEO-meta wordt niet geïmporteerd; verwijder dubbele SEO-secties uit het TXT-bestand.');
+        return new WP_Error('dca_duplicate_yoast', 'Opslaan gestopt: de kop "YOAST SEO" komt meerdere keren voor. verwijder dubbele SEO-secties uit het TXT-bestand.');
     }
 
     if ($seo_meta_count && $yoast_count) {
-        return new WP_Error('dca_duplicate_seo_sections', 'Opslaan gestopt: gebruik SEO META of YOAST SEO, niet beide tegelijk. SEO-meta wordt niet geïmporteerd.');
+        return new WP_Error('dca_duplicate_seo_sections', 'Opslaan gestopt: gebruik SEO META of YOAST SEO, niet beide tegelijk. SEO-meta kan niet veilig worden bepaald.');
     }
 
     if ($required && !$seo_meta_count && !$yoast_count) {
         return new WP_Error('dca_missing_seo_meta', 'Opslaan gestopt: de kop "SEO META" of "YOAST SEO" ontbreekt.');
     }
+
+    return true;
+}
+
+function dca_tb_extract_yoast_meta_description($textblock) {
+    $section = null;
+
+    foreach (dca_tb_seo_section_markers() as $marker) {
+        $section = dca_tb_section($textblock, $marker, dca_tb_seo_end_markers());
+
+        if ($section !== null) {
+            break;
+        }
+    }
+
+    if ($section === null) {
+        return null;
+    }
+
+    foreach (['Yoast metabeschrijving:', 'Metabeschrijving:', 'Meta description:'] as $label) {
+        $value = dca_tb_label($section, $label, ['Yoast metabeschrijving:', 'Metabeschrijving:', 'Meta description:']);
+
+        if ($value !== null) {
+            return dca_tb_clean_text($value);
+        }
+    }
+
+    return dca_tb_clean_text($section);
+}
+
+function dca_tb_get_yoast_taxonomy_meta_description($term_id, $taxonomy) {
+    $term_id = absint($term_id);
+    $taxonomy = sanitize_key((string) $taxonomy);
+
+    if (!$term_id || !dca_tb_is_supported_taxonomy($taxonomy)) {
+        return '';
+    }
+
+    $term_meta_value = get_term_meta($term_id, '_yoast_wpseo_metadesc', true);
+
+    if (dca_tb_has_existing_content_value($term_meta_value)) {
+        return dca_tb_text($term_meta_value);
+    }
+
+    $taxonomy_meta = get_option('wpseo_taxonomy_meta', []);
+
+    if (!is_array($taxonomy_meta)) {
+        return '';
+    }
+
+    $legacy_value = $taxonomy_meta[$taxonomy][$term_id]['wpseo_desc'] ?? '';
+
+    return dca_tb_text($legacy_value);
+}
+
+function dca_tb_update_yoast_taxonomy_meta_description($term_id, $taxonomy, $description) {
+    $term_id = absint($term_id);
+    $taxonomy = sanitize_key((string) $taxonomy);
+    $description = dca_tb_clean_text($description);
+
+    if (!$term_id || !dca_tb_is_supported_taxonomy($taxonomy)) {
+        return false;
+    }
+
+    update_term_meta($term_id, '_yoast_wpseo_metadesc', $description);
+
+    $taxonomy_meta = get_option('wpseo_taxonomy_meta', []);
+
+    if (!is_array($taxonomy_meta)) {
+        $taxonomy_meta = [];
+    }
+
+    if (!isset($taxonomy_meta[$taxonomy]) || !is_array($taxonomy_meta[$taxonomy])) {
+        $taxonomy_meta[$taxonomy] = [];
+    }
+
+    if (!isset($taxonomy_meta[$taxonomy][$term_id]) || !is_array($taxonomy_meta[$taxonomy][$term_id])) {
+        $taxonomy_meta[$taxonomy][$term_id] = [];
+    }
+
+    $taxonomy_meta[$taxonomy][$term_id]['wpseo_desc'] = $description;
+
+    return update_option('wpseo_taxonomy_meta', $taxonomy_meta, false);
+}
+
+function dca_tb_get_yoast_meta_description($object_id, $object_type = 'post', $taxonomy = '') {
+    $object_id = absint($object_id);
+    $object_type = sanitize_key((string) $object_type);
+    $taxonomy = sanitize_key((string) $taxonomy);
+
+    if (!$object_id) {
+        return '';
+    }
+
+    if ($object_type === 'term' && dca_tb_is_supported_taxonomy($taxonomy)) {
+        return dca_tb_get_yoast_taxonomy_meta_description($object_id, $taxonomy);
+    }
+
+    return dca_tb_text(get_post_meta($object_id, '_yoast_wpseo_metadesc', true));
+}
+
+function dca_tb_build_yoast_meta_block($object_id, $object_type = 'post', $taxonomy = '') {
+    return trim(implode("\n", [
+        'SEO META',
+        '',
+        'Yoast metabeschrijving:',
+        dca_tb_get_yoast_meta_description($object_id, $object_type, $taxonomy),
+    ]));
+}
+
+function dca_tb_save_yoast_meta_from_textblock($object_id, $textblock, $object_type = 'post', $taxonomy = '') {
+    $description = dca_tb_extract_yoast_meta_description($textblock);
+
+    if ($description === null || !dca_tb_has_importable_text_value($description)) {
+        return true;
+    }
+
+    $object_id = absint($object_id);
+    $object_type = sanitize_key((string) $object_type);
+    $taxonomy = sanitize_key((string) $taxonomy);
+
+    if (!$object_id) {
+        return new WP_Error('dca_yoast_invalid_object', 'SEO-meta kon niet worden opgeslagen: ongeldig object.');
+    }
+
+    if ($object_type === 'term') {
+        if (!dca_tb_can_edit_term($object_id, $taxonomy)) {
+            return new WP_Error('dca_yoast_term_no_permission', 'Geen rechten om de Yoast metabeschrijving van deze term te wijzigen.');
+        }
+
+        dca_tb_update_yoast_taxonomy_meta_description($object_id, $taxonomy, $description);
+        return true;
+    }
+
+    if (!dca_tb_can_edit_post($object_id)) {
+        return new WP_Error('dca_yoast_post_no_permission', 'Geen rechten om de Yoast metabeschrijving van dit item te wijzigen.');
+    }
+
+    update_post_meta($object_id, '_yoast_wpseo_metadesc', $description);
+    return true;
+}
+
+function dca_tb_term_content_end_markers() {
+    return dca_tb_seo_section_markers();
+}
+
+function dca_tb_build_term_textblock($term_id, $taxonomy) {
+    $term_id = absint($term_id);
+    $taxonomy = sanitize_key((string) $taxonomy);
+    $term = get_term($term_id, $taxonomy);
+
+    if (!$term || is_wp_error($term) || !dca_tb_is_supported_taxonomy($taxonomy)) {
+        return 'Geen geldige categorie of productcategorie gevonden.';
+    }
+
+    return trim(implode("\n", [
+        'NAAM',
+        '',
+        dca_tb_text($term->name),
+        '',
+        'BESCHRIJVING',
+        '',
+        dca_tb_text($term->description),
+        '',
+        dca_tb_build_yoast_meta_block($term_id, 'term', $taxonomy),
+    ]));
+}
+
+function dca_tb_validate_term_textblock($textblock) {
+    foreach (['NAAM', 'BESCHRIJVING'] as $marker) {
+        $count = dca_tb_marker_count($textblock, $marker);
+
+        if ($count === 0) {
+            return new WP_Error('dca_missing_term_marker', 'Opslaan gestopt: de kop "' . $marker . '" ontbreekt of staat niet op een eigen regel.');
+        }
+
+        if ($count > 1) {
+            return new WP_Error('dca_duplicate_term_marker', 'Opslaan gestopt: de kop "' . $marker . '" komt meerdere keren voor.');
+        }
+    }
+
+    return dca_tb_validate_seo_meta_block($textblock, false);
+}
+
+function dca_tb_mark_term_updated($term_id, $taxonomy) {
+    $term_id = absint($term_id);
+    $taxonomy = sanitize_key((string) $taxonomy);
+
+    if (!$term_id || !dca_tb_is_supported_taxonomy($taxonomy)) {
+        return;
+    }
+
+    update_term_meta($term_id, '_dca_acf_textblock_updated_at', current_time('timestamp'));
+    update_term_meta($term_id, '_dca_acf_textblock_updated_by', get_current_user_id());
+}
+
+function dca_tb_add_term_backup($term_id, $taxonomy, $source = 'save') {
+    $term_id = absint($term_id);
+    $taxonomy = sanitize_key((string) $taxonomy);
+    $term = get_term($term_id, $taxonomy);
+
+    if (!$term || is_wp_error($term) || !dca_tb_is_supported_taxonomy($taxonomy)) {
+        return;
+    }
+
+    $existing = get_term_meta($term_id, '_dca_tb_backups', true);
+
+    if (!is_array($existing)) {
+        $existing = [];
+    }
+
+    $existing[] = [
+        'time'     => current_time('timestamp'),
+        'user'     => get_current_user_id(),
+        'source'   => sanitize_key($source),
+        'taxonomy' => $taxonomy,
+        'title'    => $term->name,
+        'text'     => dca_tb_build_term_textblock($term_id, $taxonomy),
+    ];
+
+    if (count($existing) > 20) {
+        $existing = array_slice($existing, -20);
+    }
+
+    update_term_meta($term_id, '_dca_tb_backups', $existing);
+}
+
+function dca_tb_save_term_to_fields($term_id, $taxonomy, $textblock, $source = 'save') {
+    $term_id = absint($term_id);
+    $taxonomy = sanitize_key((string) $taxonomy);
+    $term = get_term($term_id, $taxonomy);
+
+    if (!$term || is_wp_error($term) || !dca_tb_is_supported_taxonomy($taxonomy)) {
+        return new WP_Error('dca_invalid_term', 'Geen geldige categorie of productcategorie gevonden.');
+    }
+
+    if (!dca_tb_can_edit_term($term_id, $taxonomy)) {
+        return new WP_Error('dca_term_no_permission', 'Geen rechten om deze categorie te bewerken.');
+    }
+
+    $textblock = trim(str_replace(["\r\n", "\r"], "\n", (string) $textblock));
+    $validation = dca_tb_validate_term_textblock($textblock);
+
+    if (is_wp_error($validation)) {
+        return $validation;
+    }
+
+    if (DCA_TB_IMPORT_DRY_RUN) {
+        return true;
+    }
+
+    dca_tb_add_term_backup($term_id, $taxonomy, $source);
+
+    $name = dca_tb_section($textblock, 'NAAM', ['BESCHRIJVING']);
+    $description = dca_tb_section($textblock, 'BESCHRIJVING', dca_tb_term_content_end_markers());
+    $args = [];
+
+    if (dca_tb_has_importable_text_value($name)) {
+        $args['name'] = dca_tb_clean_text($name);
+    }
+
+    if ($description !== null && dca_tb_has_importable_text_value($description)) {
+        $args['description'] = dca_tb_clean_html($description);
+    }
+
+    if (!empty($args)) {
+        $updated = wp_update_term($term_id, $taxonomy, $args);
+
+        if (is_wp_error($updated)) {
+            return $updated;
+        }
+    }
+
+    $seo_save = dca_tb_save_yoast_meta_from_textblock($term_id, $textblock, 'term', $taxonomy);
+    if (is_wp_error($seo_save)) {
+        return $seo_save;
+    }
+
+    dca_tb_mark_term_updated($term_id, $taxonomy);
+    clean_term_cache($term_id, $taxonomy);
 
     return true;
 }
@@ -2112,7 +2539,7 @@ function dca_tb_build_textblock($post_id) {
     }
 
     /**
-     * Berichten: alleen WordPress titel, content, samenvatting en media.
+     * Berichten: alleen WordPress titel, content, samenvatting, Yoast SEO en media.
      */
     if ($post->post_type === 'post') {
         $out = [
@@ -2123,6 +2550,8 @@ function dca_tb_build_textblock($post_id) {
             'CONTENT',
             '',
             dca_tb_text($post->post_content),
+            '',
+            dca_tb_build_yoast_meta_block($post_id, 'post'),
             '',
             dca_tb_build_summary_block($post_id),
             '',
@@ -2135,7 +2564,7 @@ function dca_tb_build_textblock($post_id) {
     }
 
     /**
-     * Pagina's: exporteer alleen de ACF-velden die ACF voor dit object detecteert.
+     * Pagina's en producten: exporteer alleen de ACF-velden die ACF voor dit object detecteert.
      */
     if (!function_exists('get_field_objects')) {
         return 'ACF is niet actief of get_field_objects() is niet beschikbaar.';
@@ -2143,6 +2572,8 @@ function dca_tb_build_textblock($post_id) {
 
     $out = [
         dca_tb_build_acf_fields_block($post_id),
+        '',
+        dca_tb_build_yoast_meta_block($post_id, 'post'),
         '',
         dca_tb_build_summary_block($post_id),
         '',
@@ -2355,6 +2786,11 @@ function dca_tb_save_to_fields($post_id, $textblock, $source = 'save') {
             }
         }
 
+        $seo_save = dca_tb_save_yoast_meta_from_textblock($post_id, $textblock, 'post');
+        if (is_wp_error($seo_save)) {
+            return $seo_save;
+        }
+
         $featured = dca_tb_apply_featured_image_from_textblock($post_id, $textblock);
         if (is_wp_error($featured)) {
             return $featured;
@@ -2407,6 +2843,11 @@ function dca_tb_save_to_fields($post_id, $textblock, $source = 'save') {
         }
     }
 
+    $seo_save = dca_tb_save_yoast_meta_from_textblock($post_id, $textblock, 'post');
+    if (is_wp_error($seo_save)) {
+        return $seo_save;
+    }
+
     $featured = dca_tb_apply_featured_image_from_textblock($post_id, $textblock);
     if (is_wp_error($featured)) {
         return $featured;
@@ -2419,11 +2860,41 @@ function dca_tb_save_to_fields($post_id, $textblock, $source = 'save') {
 
 }
 
-function dca_tb_build_bulk_export($post_ids) {
+function dca_tb_build_bulk_export($object_ids, $object_type = 'post', $taxonomy = '') {
     $out = [];
+    $object_type = sanitize_key((string) $object_type);
+    $taxonomy = sanitize_key((string) $taxonomy);
 
-    foreach ($post_ids as $post_id) {
-        $post_id = absint($post_id);
+    foreach ($object_ids as $object_id) {
+        $object_id = absint($object_id);
+
+        if ($object_type === 'term') {
+            $term = $object_id ? get_term($object_id, $taxonomy) : null;
+
+            if (!$term || is_wp_error($term) || !dca_tb_is_supported_taxonomy($taxonomy) || !dca_tb_can_edit_term($object_id, $taxonomy)) {
+                continue;
+            }
+
+            $term_link = get_term_link($term, $taxonomy);
+            array_push(
+                $out,
+                str_repeat('=', 80),
+                dca_tb_taxonomy_label_single($taxonomy) . ': ' . $term->name,
+                'URL: ' . (!is_wp_error($term_link) ? $term_link : ''),
+                'ID: ' . $object_id,
+                'Object type: term',
+                'Taxonomy: ' . $taxonomy,
+                str_repeat('=', 80),
+                '',
+                dca_tb_build_term_textblock($object_id, $taxonomy),
+                '',
+                ''
+            );
+
+            continue;
+        }
+
+        $post_id = $object_id;
         $post = $post_id ? get_post($post_id) : null;
 
         if (!$post || !dca_tb_is_supported_post_type($post->post_type) || !current_user_can('edit_post', $post_id)) {
@@ -2440,6 +2911,7 @@ function dca_tb_build_bulk_export($post_ids) {
             dca_tb_post_type_label_single($post_id) . ': ' . get_the_title($post_id),
             'URL: ' . get_permalink($post_id),
             'ID: ' . $post_id,
+            'Object type: post',
             'Post type: ' . $post->post_type,
             str_repeat('=', 80),
             '',
@@ -2449,9 +2921,15 @@ function dca_tb_build_bulk_export($post_ids) {
         );
     }
 
-    return empty($out)
-        ? new WP_Error('dca_no_pages', 'Er zijn geen geldige berichten, pagina’s of producten geselecteerd.')
-        : trim(implode("\n", $out));
+    if (!empty($out)) {
+        return trim(implode("\n", $out));
+    }
+
+    if ($object_type === 'term') {
+        return new WP_Error('dca_no_terms', 'Er zijn geen geldige categorieën of productcategorieën geselecteerd.');
+    }
+
+    return new WP_Error('dca_no_pages', 'Er zijn geen geldige berichten, pagina’s of producten geselecteerd.');
 }
 
 function dca_tb_normalize_title_for_match($value) {
@@ -2516,6 +2994,26 @@ function dca_tb_import_label_to_post_type($label) {
     return '';
 }
 
+function dca_tb_import_label_to_taxonomy($label) {
+    $label = strtoupper(dca_tb_clean_text((string) $label));
+
+    if ($label === 'CATEGORIE') {
+        return 'category';
+    }
+
+    if ($label === 'PRODUCTCATEGORIE' || $label === 'PRODUCT CATEGORIE') {
+        return 'product_cat';
+    }
+
+    foreach (dca_tb_supported_taxonomies() as $taxonomy) {
+        if ($label === dca_tb_taxonomy_label_single($taxonomy)) {
+            return $taxonomy;
+        }
+    }
+
+    return '';
+}
+
 function dca_tb_find_post_by_url_path($url, array $allowed_post_types) {
     $source_path = dca_tb_normalize_compare_url_path($url);
 
@@ -2560,6 +3058,150 @@ function dca_tb_find_post_by_url_path($url, array $allowed_post_types) {
     } while (count($posts) === $per_page);
 
     return 0;
+}
+
+function dca_tb_term_url_matches($url, $term_id, $taxonomy) {
+    $url = trim((string) $url);
+
+    if ($url === '') {
+        return false;
+    }
+
+    $term_link = get_term_link(absint($term_id), sanitize_key((string) $taxonomy));
+
+    if (is_wp_error($term_link)) {
+        return false;
+    }
+
+    $source_path = dca_tb_normalize_compare_url_path($url);
+    $target_path = dca_tb_normalize_compare_url_path($term_link);
+
+    if ($source_path === '' || $target_path === '') {
+        return false;
+    }
+
+    return $source_path === $target_path;
+}
+
+function dca_tb_title_matches_term($title, $term_id, $taxonomy) {
+    $title = trim((string) $title);
+    $term = get_term(absint($term_id), sanitize_key((string) $taxonomy));
+
+    if ($title === '' || !$term || is_wp_error($term)) {
+        return false;
+    }
+
+    return dca_tb_normalize_title_for_match($title) === dca_tb_normalize_title_for_match($term->name);
+}
+
+function dca_tb_find_term_by_url_path($url, $taxonomy) {
+    $taxonomy = sanitize_key((string) $taxonomy);
+    $source_path = dca_tb_normalize_compare_url_path($url);
+
+    if ($source_path === '' || !dca_tb_is_supported_taxonomy($taxonomy)) {
+        return 0;
+    }
+
+    $per_page = 100;
+    $max_candidates = absint(apply_filters('dca_tb_term_url_resolve_max_candidates', 1000));
+    $checked = 0;
+    $offset = 0;
+
+    do {
+        $terms = get_terms([
+            'taxonomy'   => $taxonomy,
+            'hide_empty' => false,
+            'number'     => $per_page,
+            'offset'     => $offset,
+            'fields'     => 'ids',
+        ]);
+
+        if (is_wp_error($terms) || empty($terms)) {
+            break;
+        }
+
+        foreach ($terms as $candidate_id) {
+            $checked++;
+
+            if (dca_tb_term_url_matches($url, $candidate_id, $taxonomy)) {
+                return absint($candidate_id);
+            }
+
+            if ($max_candidates > 0 && $checked >= $max_candidates) {
+                return 0;
+            }
+        }
+
+        $offset += $per_page;
+    } while (count($terms) === $per_page);
+
+    return 0;
+}
+
+function dca_tb_resolve_term_details($term_id, $url, $title, $taxonomy) {
+    $term_id = absint($term_id);
+    $url = trim((string) $url);
+    $title = trim((string) $title);
+    $taxonomy = sanitize_key((string) $taxonomy);
+
+    if (!dca_tb_is_supported_taxonomy($taxonomy)) {
+        return ['id' => 0, 'method' => 'invalid-taxonomy'];
+    }
+
+    if ($term_id && ($term = get_term($term_id, $taxonomy)) && !is_wp_error($term)) {
+        $url_matches = dca_tb_term_url_matches($url, $term_id, $taxonomy);
+        $title_matches = dca_tb_title_matches_term($title, $term_id, $taxonomy);
+
+        if (($url === '' && $title === '') || $url_matches || $title_matches) {
+            return ['id' => $term_id, 'method' => 'id'];
+        }
+    }
+
+    if ($url !== '') {
+        $path_id = dca_tb_find_term_by_url_path($url, $taxonomy);
+
+        if ($path_id) {
+            return ['id' => $path_id, 'method' => 'url-path'];
+        }
+    }
+
+    if ($title !== '') {
+        $terms = get_terms([
+            'taxonomy'   => $taxonomy,
+            'hide_empty' => false,
+            'name'       => $title,
+            'number'     => 2,
+            'fields'     => 'ids',
+        ]);
+
+        if (!is_wp_error($terms) && count((array) $terms) === 1 && !empty($terms[0])) {
+            return ['id' => absint($terms[0]), 'method' => 'title'];
+        }
+    }
+
+    return ['id' => 0, 'method' => 'none'];
+}
+
+function dca_tb_resolve_content_item_details(array $item) {
+    $object_type = sanitize_key((string) ($item['object_type'] ?? 'post'));
+
+    if ($object_type === 'term') {
+        return dca_tb_resolve_term_details($item['source_id'] ?? 0, $item['source_url'] ?? '', $item['source_title'] ?? '', $item['source_taxonomy'] ?? '');
+    }
+
+    return dca_tb_resolve_page_details($item['source_id'] ?? 0, $item['source_url'] ?? '', $item['source_title'] ?? '', $item['source_type'] ?? '');
+}
+
+function dca_tb_resolve_content_item_title($object_id, $object_type, $taxonomy = '') {
+    $object_id = absint($object_id);
+    $object_type = sanitize_key((string) $object_type);
+
+    if ($object_type === 'term') {
+        $term = get_term($object_id, sanitize_key((string) $taxonomy));
+        return ($term && !is_wp_error($term)) ? $term->name : '';
+    }
+
+    return $object_id ? get_the_title($object_id) : '';
 }
 
 function dca_tb_resolve_page_details($page_id, $url, $title, $expected_post_type = '') {
@@ -2672,16 +3314,39 @@ function dca_tb_parse_bulk_file($txt) {
     $items = [];
 
     // Accepteer kleine variaties in bestaande TXT-exports zonder het exportformaat te wijzigen.
-    $pattern = '/^={10,}[^\S\n]*\n\s*([^:\n]+)\s*:\s*(.*?)\n\s*URL\s*:\s*(.*?)\n\s*ID\s*:\s*(\d+)\s*\n(?:\s*Post type\s*:\s*([a-z0-9_-]+)\s*\n)?={10,}[^\S\n]*(?:\n)+(.*?)(?=^={10,}[^\S\n]*\n\s*[^:\n]+\s*:|\z)/ims';
+    $pattern = '/^={10,}[^\S\n]*\n\s*([^:\n]+)\s*:\s*(.*?)\n\s*URL\s*:\s*(.*?)\n\s*ID\s*:\s*(\d+)\s*\n((?:\s*(?:Post type|Object type|Taxonomy)\s*:\s*[a-z0-9_-]+\s*\n)*)={10,}[^\S\n]*(?:\n)+(.*?)(?=^={10,}[^\S\n]*\n\s*[^:\n]+\s*:|\z)/ims';
 
     if (preg_match_all($pattern, $txt, $matches, PREG_SET_ORDER)) {
         foreach ($matches as $m) {
+            $meta = [];
+
+            if (!empty($m[5]) && preg_match_all('/^\s*([^:\n]+)\s*:\s*([a-z0-9_-]+)\s*$/mi', $m[5], $meta_matches, PREG_SET_ORDER)) {
+                foreach ($meta_matches as $meta_match) {
+                    $meta[strtolower(trim($meta_match[1]))] = sanitize_key($meta_match[2]);
+                }
+            }
+
+            $label = trim($m[1]);
+            $object_type = isset($meta['object type']) ? sanitize_key($meta['object type']) : '';
+            $taxonomy = isset($meta['taxonomy']) ? sanitize_key($meta['taxonomy']) : dca_tb_import_label_to_taxonomy($label);
+            $post_type = isset($meta['post type']) ? sanitize_key($meta['post type']) : dca_tb_import_label_to_post_type($label);
+
+            if ($object_type === '' && $taxonomy !== '' && dca_tb_is_supported_taxonomy($taxonomy)) {
+                $object_type = 'term';
+            }
+
+            if ($object_type !== 'term') {
+                $object_type = 'post';
+            }
+
             $items[] = [
-                'source_type'  => !empty($m[5]) && dca_tb_is_supported_post_type($m[5]) ? sanitize_key($m[5]) : dca_tb_import_label_to_post_type($m[1]),
-                'source_title' => trim($m[2]),
-                'source_url'   => trim($m[3]),
-                'source_id'    => absint($m[4]),
-                'textblock'    => trim($m[6]),
+                'object_type'     => $object_type,
+                'source_type'     => $object_type === 'post' && dca_tb_is_supported_post_type($post_type) ? $post_type : '',
+                'source_taxonomy' => $object_type === 'term' && dca_tb_is_supported_taxonomy($taxonomy) ? $taxonomy : '',
+                'source_title'    => trim($m[2]),
+                'source_url'      => trim($m[3]),
+                'source_id'       => absint($m[4]),
+                'textblock'       => trim($m[6]),
             ];
         }
     }
@@ -2705,54 +3370,80 @@ function dca_tb_bulk_preview($txt) {
     $preview = [];
 
     foreach ($items as $i => $item) {
-        $target_details = dca_tb_resolve_page_details($item['source_id'], $item['source_url'], $item['source_title'], $item['source_type'] ?? '');
+        $object_type = sanitize_key((string) ($item['object_type'] ?? 'post'));
+        $taxonomy = sanitize_key((string) ($item['source_taxonomy'] ?? ''));
+        $target_details = dca_tb_resolve_content_item_details($item);
         $target = absint($target_details['id'] ?? 0);
         $target_method = dca_tb_resolve_method_label($target_details['method'] ?? '');
         $status = 'error';
         $message = '';
-        $media = dca_tb_preview_media_changes($item['textblock']);
+        $media = $object_type === 'post' ? dca_tb_preview_media_changes($item['textblock']) : ['found' => 0, 'renames' => 0, 'errors' => 0];
 
         if (!$target) {
             $message = 'Overgeslagen: geen bijpassend ondersteund item gevonden.';
-        } elseif (!current_user_can('edit_post', $target)) {
+        } elseif ($object_type === 'term' && !dca_tb_can_edit_term($target, $taxonomy)) {
+            $message = 'Overgeslagen: geen rechten om deze categorie te bewerken.';
+        } elseif ($object_type !== 'term' && !current_user_can('edit_post', $target)) {
             $message = 'Overgeslagen: geen rechten om dit item te bewerken.';
         } else {
-            $target_post = get_post($target);
-            $template_reason = $target_post ? dca_tb_template_skip_reason($target) : '';
-
-            if ($template_reason !== '') {
-                $message = $template_reason;
+            if ($object_type === 'term') {
+                $validation = dca_tb_validate_term_textblock($item['textblock']);
             } else {
-                if ($target_post && $target_post->post_type === 'post') {
-                    $validation = dca_tb_validate_post_textblock($item['textblock']);
-                } else {
-                    $validation = dca_tb_validate_dynamic_acf_textblock($item['textblock']);
+                $target_post = get_post($target);
+                $template_reason = $target_post ? dca_tb_template_skip_reason($target) : '';
+
+                if ($template_reason !== '') {
+                    $message = $template_reason;
+                    $preview[] = [
+                        'index'              => $i,
+                        'source_title'       => $item['source_title'],
+                        'source_id'          => $item['source_id'],
+                        'target_id'          => $target,
+                        'target_post_id'     => $target,
+                        'target_object_type' => $object_type,
+            'target_taxonomy'    => $taxonomy,
+                        'target_title'       => dca_tb_resolve_content_item_title($target, $object_type, $taxonomy),
+                        'status'             => $status,
+                        'message'            => $message,
+                        'media_found'        => absint($media['found']),
+                        'media_renames'      => absint($media['renames']),
+                        'media_errors'       => absint($media['errors']),
+                    ];
+                    continue;
                 }
 
-                if (is_wp_error($validation)) {
-                    $message = 'Overgeslagen: ' . $validation->get_error_message();
-                } else {
-                    $status = $media['errors'] > 0 ? 'partial' : 'success';
-                    $message = 'Klaar om op te slaan' . ($target_method ? ' via ' . $target_method : '') . '. Tekst en samenvatting worden verwerkt. Media: ' . absint($media['found']) . ' gevonden, ' . absint($media['renames']) . ' bestandsnamen te hernoemen';
-                    if ($media['errors'] > 0) {
-                        $message .= ', ' . absint($media['errors']) . ' mediafout(en). Tekst wordt wel geïmporteerd.';
-                    }
-                    $message .= '.';
+                $validation = ($target_post && $target_post->post_type === 'post')
+                    ? dca_tb_validate_post_textblock($item['textblock'])
+                    : dca_tb_validate_dynamic_acf_textblock($item['textblock']);
+            }
+
+            if (is_wp_error($validation)) {
+                $message = 'Overgeslagen: ' . $validation->get_error_message();
+            } else {
+                $status = $media['errors'] > 0 ? 'partial' : 'success';
+                $message = 'Klaar om op te slaan' . ($target_method ? ' via ' . $target_method : '') . '. ';
+                $message .= $object_type === 'term' ? 'Naam, beschrijving en Yoast metabeschrijving worden verwerkt.' : 'Tekst, samenvatting en Yoast metabeschrijving worden verwerkt. Media: ' . absint($media['found']) . ' gevonden, ' . absint($media['renames']) . ' bestandsnamen te hernoemen';
+                if ($media['errors'] > 0) {
+                    $message .= ', ' . absint($media['errors']) . ' mediafout(en). Tekst wordt wel geïmporteerd.';
                 }
+                $message .= '.';
             }
         }
 
         $preview[] = [
-            'index'          => $i,
-            'source_title'   => $item['source_title'],
-            'source_id'      => $item['source_id'],
-            'target_post_id' => $target,
-            'target_title'   => $target ? get_the_title($target) : '',
-            'status'         => $status,
-            'message'        => $message,
-            'media_found'    => absint($media['found']),
-            'media_renames'  => absint($media['renames']),
-            'media_errors'   => absint($media['errors']),
+            'index'              => $i,
+            'source_title'       => $item['source_title'],
+            'source_id'          => $item['source_id'],
+            'target_id'          => $target,
+            'target_post_id'     => $target,
+            'target_object_type' => $object_type,
+            'target_taxonomy'    => $taxonomy,
+            'target_title'       => dca_tb_resolve_content_item_title($target, $object_type, $taxonomy),
+            'status'             => $status,
+            'message'            => $message,
+            'media_found'        => absint($media['found']),
+            'media_renames'      => absint($media['renames']),
+            'media_errors'       => absint($media['errors']),
         ];
     }
 
@@ -2779,7 +3470,9 @@ function dca_tb_bulk_save($txt) {
     $results  = [];
 
     foreach ($items as $i => $item) {
-        $target_details = dca_tb_resolve_page_details($item['source_id'], $item['source_url'], $item['source_title'], $item['source_type'] ?? '');
+        $object_type = sanitize_key((string) ($item['object_type'] ?? 'post'));
+        $taxonomy = sanitize_key((string) ($item['source_taxonomy'] ?? ''));
+        $target_details = dca_tb_resolve_content_item_details($item);
         $target = absint($target_details['id'] ?? 0);
         $target_method = dca_tb_resolve_method_label($target_details['method'] ?? '');
         $title  = $item['source_title'] ?: 'Blok ' . ($i + 1);
@@ -2787,84 +3480,124 @@ function dca_tb_bulk_save($txt) {
         if (!$target) {
             $skipped++;
             $results[] = [
-                'index'          => $i,
-                'source_title'   => $title,
-                'source_id'      => $item['source_id'],
-                'target_post_id' => 0,
-                'target_title'   => '',
-                'status'         => 'skipped',
-                'message'        => 'Overgeslagen: geen bijpassend ondersteund item gevonden.',
+                'index'              => $i,
+                'source_title'       => $title,
+                'source_id'          => $item['source_id'],
+                'target_id'          => 0,
+                'target_post_id'     => 0,
+                'target_object_type' => $object_type,
+            'target_taxonomy'    => $taxonomy,
+                'target_title'       => '',
+                'status'             => 'skipped',
+                'message'            => 'Overgeslagen: geen bijpassend ondersteund item gevonden.',
             ];
             continue;
         }
 
-        if (!current_user_can('edit_post', $target)) {
+        if ($object_type === 'term' && !dca_tb_can_edit_term($target, $taxonomy)) {
             $skipped++;
             $results[] = [
-                'index'          => $i,
-                'source_title'   => $title,
-                'source_id'      => $item['source_id'],
-                'target_post_id' => $target,
-                'target_title'   => get_the_title($target),
-                'status'         => 'skipped',
-                'message'        => 'Overgeslagen: geen rechten om dit item te bewerken.',
+                'index'              => $i,
+                'source_title'       => $title,
+                'source_id'          => $item['source_id'],
+                'target_id'          => $target,
+                'target_post_id'     => $target,
+                'target_object_type' => $object_type,
+            'target_taxonomy'    => $taxonomy,
+                'target_title'       => dca_tb_resolve_content_item_title($target, $object_type, $taxonomy),
+                'status'             => 'skipped',
+                'message'            => 'Overgeslagen: geen rechten om deze categorie te bewerken.',
             ];
             continue;
         }
 
-
-        $target_post = get_post($target);
-        $template_reason = $target_post ? dca_tb_template_skip_reason($target) : '';
-
-        if ($template_reason !== '') {
+        if ($object_type !== 'term' && !current_user_can('edit_post', $target)) {
             $skipped++;
             $results[] = [
-                'index'          => $i,
-                'source_title'   => $title,
-                'source_id'      => $item['source_id'],
-                'target_post_id' => $target,
-                'target_title'   => get_the_title($target),
-                'status'         => 'skipped',
-                'message'        => $template_reason,
+                'index'              => $i,
+                'source_title'       => $title,
+                'source_id'          => $item['source_id'],
+                'target_id'          => $target,
+                'target_post_id'     => $target,
+                'target_object_type' => $object_type,
+            'target_taxonomy'    => $taxonomy,
+                'target_title'       => get_the_title($target),
+                'status'             => 'skipped',
+                'message'            => 'Overgeslagen: geen rechten om dit item te bewerken.',
             ];
             continue;
         }
 
-        $validation = ($target_post && $target_post->post_type === 'post')
-            ? dca_tb_validate_post_textblock($item['textblock'])
-            : dca_tb_validate_dynamic_acf_textblock($item['textblock']);
+        if ($object_type === 'term') {
+            $validation = dca_tb_validate_term_textblock($item['textblock']);
+        } else {
+            $target_post = get_post($target);
+            $template_reason = $target_post ? dca_tb_template_skip_reason($target) : '';
+
+            if ($template_reason !== '') {
+                $skipped++;
+                $results[] = [
+                    'index'              => $i,
+                    'source_title'       => $title,
+                    'source_id'          => $item['source_id'],
+                    'target_id'          => $target,
+                    'target_post_id'     => $target,
+                    'target_object_type' => $object_type,
+            'target_taxonomy'    => $taxonomy,
+                    'target_title'       => get_the_title($target),
+                    'status'             => 'skipped',
+                    'message'            => $template_reason,
+                ];
+                continue;
+            }
+
+            $validation = ($target_post && $target_post->post_type === 'post')
+                ? dca_tb_validate_post_textblock($item['textblock'])
+                : dca_tb_validate_dynamic_acf_textblock($item['textblock']);
+        }
 
         if (is_wp_error($validation)) {
             $skipped++;
             $results[] = [
-                'index'          => $i,
-                'source_title'   => $title,
-                'source_id'      => $item['source_id'],
-                'target_post_id' => $target,
-                'target_title'   => get_the_title($target),
-                'status'         => 'skipped',
-                'message'        => 'Overgeslagen: ' . $validation->get_error_message(),
+                'index'              => $i,
+                'source_title'       => $title,
+                'source_id'          => $item['source_id'],
+                'target_id'          => $target,
+                'target_post_id'     => $target,
+                'target_object_type' => $object_type,
+            'target_taxonomy'    => $taxonomy,
+                'target_title'       => dca_tb_resolve_content_item_title($target, $object_type, $taxonomy),
+                'status'             => 'skipped',
+                'message'            => 'Overgeslagen: ' . $validation->get_error_message(),
             ];
             continue;
         }
 
-        $save = dca_tb_save_to_fields($target, $item['textblock'], 'bulk');
+        if ($object_type === 'term') {
+            $save = dca_tb_save_term_to_fields($target, $taxonomy, $item['textblock'], 'bulk');
+            $media_result = ['media_updated' => 0, 'renamed' => 0, 'media_errors' => 0, 'url_replaces' => 0, 'messages' => []];
+        } else {
+            $save = dca_tb_save_to_fields($target, $item['textblock'], 'bulk');
+            $media_result = is_wp_error($save) ? ['media_updated' => 0, 'renamed' => 0, 'media_errors' => 0, 'url_replaces' => 0, 'messages' => []] : dca_tb_save_media_items($target, $item['textblock']);
+        }
 
         if (is_wp_error($save)) {
             $skipped++;
             $results[] = [
-                'index'          => $i,
-                'source_title'   => $title,
-                'source_id'      => $item['source_id'],
-                'target_post_id' => $target,
-                'target_title'   => get_the_title($target),
-                'status'         => 'skipped',
-                'message'        => 'Overgeslagen: ' . $save->get_error_message(),
+                'index'              => $i,
+                'source_title'       => $title,
+                'source_id'          => $item['source_id'],
+                'target_id'          => $target,
+                'target_post_id'     => $target,
+                'target_object_type' => $object_type,
+            'target_taxonomy'    => $taxonomy,
+                'target_title'       => dca_tb_resolve_content_item_title($target, $object_type, $taxonomy),
+                'status'             => 'skipped',
+                'message'            => 'Overgeslagen: ' . $save->get_error_message(),
             ];
             continue;
         }
 
-        $media_result = dca_tb_save_media_items($target, $item['textblock']);
         $media_updated += absint($media_result['media_updated']);
         $renamed       += absint($media_result['renamed']);
         $media_errors  += absint($media_result['media_errors']);
@@ -2872,19 +3605,23 @@ function dca_tb_bulk_save($txt) {
 
         $imported++;
         $status = $media_result['media_errors'] > 0 ? 'partial' : 'success';
-        $message = (DCA_TB_IMPORT_DRY_RUN ? 'Dry-run: zou importeren. ' : 'Geïmporteerd. ') . ($target_method ? 'Match: ' . $target_method . '. ' : '') . 'Media bijgewerkt: ' . absint($media_result['media_updated']) . ', bestandsnamen hernoemd: ' . absint($media_result['renamed']) . ', URL-vervangingen: ' . absint($media_result['url_replaces']) . '.';
+        $message = (DCA_TB_IMPORT_DRY_RUN ? 'Dry-run: zou importeren. ' : 'Geïmporteerd. ') . ($target_method ? 'Match: ' . $target_method . '. ' : '');
+        $message .= $object_type === 'term' ? 'Categorievelden en Yoast metabeschrijving bijgewerkt.' : 'Media bijgewerkt: ' . absint($media_result['media_updated']) . ', bestandsnamen hernoemd: ' . absint($media_result['renamed']) . ', URL-vervangingen: ' . absint($media_result['url_replaces']) . '.';
         if ($media_result['media_errors'] > 0) {
             $message .= ' Mediafouten: ' . absint($media_result['media_errors']) . '. ' . implode(' ', array_slice($media_result['messages'], 0, 3));
         }
 
         $results[] = [
-            'index'          => $i,
-            'source_title'   => $title,
-            'source_id'      => $item['source_id'],
-            'target_post_id' => $target,
-            'target_title'   => get_the_title($target),
-            'status'         => $status,
-            'message'        => $message,
+            'index'              => $i,
+            'source_title'       => $title,
+            'source_id'          => $item['source_id'],
+            'target_id'          => $target,
+            'target_post_id'     => $target,
+            'target_object_type' => $object_type,
+            'target_taxonomy'    => $taxonomy,
+            'target_title'       => dca_tb_resolve_content_item_title($target, $object_type, $taxonomy),
+            'status'             => $status,
+            'message'            => $message,
         ];
     }
 
@@ -2939,7 +3676,7 @@ function dca_tb_format_import_log_text($log = null) {
     $lines[] = str_repeat('-', 60);
 
     foreach (($log['results'] ?? []) as $row) {
-        $lines[] = '[' . strtoupper((string) ($row['status'] ?? 'info')) . '] ' . (string) ($row['source_title'] ?? '-') . ' -> ' . (string) ($row['target_title'] ?? '-') . ' (#' . absint($row['target_post_id'] ?? 0) . ')';
+        $lines[] = '[' . strtoupper((string) ($row['status'] ?? 'info')) . '] ' . (string) ($row['source_title'] ?? '-') . ' -> ' . (string) ($row['target_title'] ?? '-') . ' (#' . absint($row['target_id'] ?? ($row['target_post_id'] ?? 0)) . ')';
         $lines[] = (string) ($row['message'] ?? '');
         $lines[] = '';
     }
@@ -2949,7 +3686,8 @@ function dca_tb_format_import_log_text($log = null) {
 
 function dca_tb_restore_last_import_page_backups() {
     $log = dca_tb_get_last_import_log();
-    $ids = [];
+    $post_ids = [];
+    $term_ids = [];
 
     foreach (($log['results'] ?? []) as $row) {
         if (!is_array($row)) {
@@ -2960,13 +3698,25 @@ function dca_tb_restore_last_import_page_backups() {
             continue;
         }
 
-        $id = absint($row['target_post_id'] ?? 0);
-        if ($id) {
-            $ids[$id] = $id;
+        $object_type = sanitize_key((string) ($row['target_object_type'] ?? 'post'));
+        $id = absint($row['target_id'] ?? ($row['target_post_id'] ?? 0));
+
+        if (!$id) {
+            continue;
         }
+
+        if ($object_type === 'term') {
+            $taxonomy = sanitize_key((string) ($row['target_taxonomy'] ?? ''));
+            if ($taxonomy !== '') {
+                $term_ids[$taxonomy . ':' . $id] = ['id' => $id, 'taxonomy' => $taxonomy];
+            }
+            continue;
+        }
+
+        $post_ids[$id] = $id;
     }
 
-    if (empty($ids)) {
+    if (empty($post_ids) && empty($term_ids)) {
         return new WP_Error('dca_restore_no_import_items', 'Geen herstelbare items gevonden in het laatste importlog.');
     }
 
@@ -2974,12 +3724,24 @@ function dca_tb_restore_last_import_page_backups() {
     $skipped = 0;
     $messages = [];
 
-    foreach ($ids as $id) {
+    foreach ($post_ids as $id) {
         $restore = dca_tb_restore_last_page_backup($id);
 
         if (is_wp_error($restore)) {
             $skipped++;
             $messages[] = '#' . absint($id) . ': ' . $restore->get_error_message();
+            continue;
+        }
+
+        $restored++;
+    }
+
+    foreach ($term_ids as $term_ref) {
+        $restore = dca_tb_restore_last_term_backup($term_ref['id'], $term_ref['taxonomy']);
+
+        if (is_wp_error($restore)) {
+            $skipped++;
+            $messages[] = '#' . absint($term_ref['id']) . ': ' . $restore->get_error_message();
             continue;
         }
 
@@ -3021,6 +3783,32 @@ function dca_tb_restore_last_page_backup($post_id) {
     }
 
     return dca_tb_save_to_fields($post_id, $text, 'rollback');
+}
+
+function dca_tb_restore_last_term_backup($term_id, $taxonomy) {
+    $term_id = absint($term_id);
+    $taxonomy = sanitize_key((string) $taxonomy);
+
+    if (!dca_tb_can_edit_term($term_id, $taxonomy)) {
+        return new WP_Error('dca_restore_term_no_permission', 'Geen rechten om deze categorie te herstellen.');
+    }
+
+    if (DCA_TB_IMPORT_DRY_RUN) {
+        return new WP_Error('dca_restore_term_dry_run', 'Rollback is niet beschikbaar zolang dry-run actief is.');
+    }
+
+    $backups = get_term_meta($term_id, '_dca_tb_backups', true);
+    if (!is_array($backups) || empty($backups)) {
+        return new WP_Error('dca_restore_term_no_backup', 'Geen categorieback-up gevonden.');
+    }
+
+    $last = end($backups);
+    $text = isset($last['text']) ? (string) $last['text'] : '';
+    if ($text === '') {
+        return new WP_Error('dca_restore_term_empty_backup', 'Laatste categorieback-up bevat geen tekst.');
+    }
+
+    return dca_tb_save_term_to_fields($term_id, $taxonomy, $text, 'rollback');
 }
 
 function dca_tb_normalize_upload_relative_path($relative_path) {
@@ -3136,6 +3924,28 @@ function dca_tb_can_edit_post($post_id) {
     return $post && dca_tb_is_supported_post_type($post->post_type) && current_user_can('edit_post', $post_id);
 }
 
+function dca_tb_can_edit_term($term_id, $taxonomy) {
+    $term_id = absint($term_id);
+    $taxonomy = sanitize_key((string) $taxonomy);
+    $term = $term_id ? get_term($term_id, $taxonomy) : null;
+
+    if (!$term || is_wp_error($term) || !dca_tb_is_supported_taxonomy($taxonomy)) {
+        return false;
+    }
+
+    $tax_object = get_taxonomy($taxonomy);
+    $capability = ($tax_object && !empty($tax_object->cap->edit_terms)) ? $tax_object->cap->edit_terms : 'manage_categories';
+
+    return current_user_can($capability);
+}
+
+function dca_tb_get_request_object_type() {
+    $object_type = dca_tb_post_text('object_type');
+    $object_type = sanitize_key($object_type);
+
+    return $object_type === 'term' ? 'term' : 'post';
+}
+
 function dca_tb_post_int($key) {
     if (!isset($_POST[$key]) || is_array($_POST[$key])) {
         return 0;
@@ -3249,6 +4059,26 @@ function dca_tb_require_ajax_access() {
 add_action('wp_ajax_dca_get_acf_textblock', function () {
     dca_tb_require_ajax_access();
 
+    $object_type = dca_tb_get_request_object_type();
+
+    if ($object_type === 'term') {
+        $term_id = dca_tb_post_int('term_id');
+        $taxonomy = sanitize_key(dca_tb_post_text('taxonomy'));
+        $term = get_term($term_id, $taxonomy);
+
+        if (!dca_tb_can_edit_term($term_id, $taxonomy) || !$term || is_wp_error($term)) {
+            wp_send_json_error(['message' => 'Geen toegang tot deze categorie.']);
+        }
+
+        $term_link = get_term_link($term, $taxonomy);
+
+        wp_send_json_success([
+            'title'    => $term->name,
+            'text'     => dca_tb_build_term_textblock($term_id, $taxonomy),
+            'view_url' => !is_wp_error($term_link) ? $term_link : '',
+        ]);
+    }
+
     $post_id = dca_tb_post_int('post_id');
 
     if (!dca_tb_can_edit_post($post_id)) {
@@ -3266,8 +4096,23 @@ add_action('wp_ajax_dca_save_acf_textblock', function () {
     dca_tb_require_ajax_access();
     dca_tb_require_destructive_confirmation();
 
-    $post_id = dca_tb_post_int('post_id');
+    $object_type = dca_tb_get_request_object_type();
     $text = dca_tb_post_text('textblock');
+
+    if ($object_type === 'term') {
+        $term_id = dca_tb_post_int('term_id');
+        $taxonomy = sanitize_key(dca_tb_post_text('taxonomy'));
+
+        $save = dca_tb_save_term_to_fields($term_id, $taxonomy, $text, 'single');
+
+        if (is_wp_error($save)) {
+            wp_send_json_error(['message' => $save->get_error_message()]);
+        }
+
+        wp_send_json_success(['message' => 'Categorie opgeslagen. Back-up is automatisch gemaakt.']);
+    }
+
+    $post_id = dca_tb_post_int('post_id');
 
     if (!dca_tb_can_edit_post($post_id)) {
         wp_send_json_error(['message' => 'Geen toegang tot deze pagina.']);
@@ -3292,17 +4137,23 @@ add_action('wp_ajax_dca_save_acf_textblock', function () {
 add_action('wp_ajax_dca_bulk_get_acf_textblocks', function () {
     dca_tb_require_ajax_access();
 
-    $post_ids = dca_tb_post_id_list('post_ids');
+    $object_type = dca_tb_get_request_object_type();
+    $taxonomy = sanitize_key(dca_tb_post_text('taxonomy'));
+    $object_ids = dca_tb_post_id_list('object_ids');
 
-    if (!$post_ids) {
+    if (!$object_ids) {
+        $object_ids = dca_tb_post_id_list('post_ids');
+    }
+
+    if (!$object_ids) {
         wp_send_json_error(['message' => 'Selecteer eerst één of meerdere items.']);
     }
 
-    if (count($post_ids) > DCA_TB_MAX_IMPORT_PAGES) {
-        wp_send_json_error(['message' => 'Export bevat ' . count($post_ids) . ' items. Maximaal toegestaan: ' . absint(DCA_TB_MAX_IMPORT_PAGES) . '.']);
+    if (count($object_ids) > DCA_TB_MAX_IMPORT_PAGES) {
+        wp_send_json_error(['message' => 'Export bevat ' . count($object_ids) . ' items. Maximaal toegestaan: ' . absint(DCA_TB_MAX_IMPORT_PAGES) . '.']);
     }
 
-    $text = dca_tb_build_bulk_export($post_ids);
+    $text = dca_tb_build_bulk_export($object_ids, $object_type, $taxonomy);
 
     if (is_wp_error($text)) {
         wp_send_json_error(['message' => $text->get_error_message()]);
@@ -3418,21 +4269,31 @@ add_action('wp_ajax_dca_restore_last_media_backup', function () {
 
 
 function dca_tb_should_load_admin_ui($hook_suffix = '') {
-    if ($hook_suffix !== '' && $hook_suffix !== 'edit.php') {
+    if ($hook_suffix !== '' && !in_array($hook_suffix, ['edit.php', 'edit-tags.php'], true)) {
         return false;
     }
 
     $screen = get_current_screen();
     $post_type = ($screen && isset($screen->post_type)) ? sanitize_key((string) $screen->post_type) : '';
+    $taxonomy = ($screen && isset($screen->taxonomy)) ? sanitize_key((string) $screen->taxonomy) : '';
 
-    return $screen
-        && $screen->base === 'edit'
-        && $post_type !== ''
-        && dca_tb_is_supported_post_type($post_type);
+    if (!$screen) {
+        return false;
+    }
+
+    if ($screen->base === 'edit') {
+        return $post_type !== '' && dca_tb_is_supported_post_type($post_type);
+    }
+
+    if ($screen->base === 'edit-tags') {
+        return $taxonomy !== '' && dca_tb_is_supported_taxonomy($taxonomy);
+    }
+
+    return false;
 }
 
 function dca_tb_admin_body_class($classes) {
-    if (!dca_tb_should_load_admin_ui('edit.php') || !dca_tb_current_user_can_use_manager()) {
+    if (!dca_tb_should_load_admin_ui() || !dca_tb_current_user_can_use_manager()) {
         return $classes;
     }
 
@@ -3453,25 +4314,35 @@ add_filter('admin_body_class', 'dca_tb_admin_body_class');
 function dca_tb_get_admin_asset_settings() {
     $screen = get_current_screen();
     $post_type = ($screen && isset($screen->post_type)) ? sanitize_key((string) $screen->post_type) : 'page';
-    $status_filter = dca_tb_get_list_status_filter();
-    $template_filter = dca_tb_get_list_template_filter();
-    $base_url = $post_type === 'post'
-        ? admin_url('edit.php')
-        : admin_url('edit.php?post_type=' . $post_type);
+    $taxonomy = ($screen && isset($screen->taxonomy)) ? sanitize_key((string) $screen->taxonomy) : '';
+    $object_type = ($screen && $screen->base === 'edit-tags') ? 'term' : 'post';
+    $filter_url = '';
+    $filter_label = '';
 
-    if ($template_filter !== '' && dca_tb_is_supported_post_type($post_type)) {
-        $base_url = add_query_arg('dca_tb_template', $template_filter, $base_url);
+    if ($object_type === 'post') {
+        $status_filter = dca_tb_get_list_status_filter();
+        $template_filter = dca_tb_get_list_template_filter();
+        $base_url = $post_type === 'post'
+            ? admin_url('edit.php')
+            : admin_url('edit.php?post_type=' . $post_type);
+
+        if ($template_filter !== '' && dca_tb_is_supported_post_type($post_type)) {
+            $base_url = add_query_arg('dca_tb_template', $template_filter, $base_url);
+        }
+
+        $not_done_url = add_query_arg('dca_tb_status', 'not_done', $base_url);
+        $filter_url = $status_filter === 'not_done' ? $base_url : $not_done_url;
+        $filter_label = $status_filter === 'not_done' ? 'Toon alles' : 'Verberg vandaag bijgewerkt';
     }
 
-    $not_done_url = add_query_arg('dca_tb_status', 'not_done', $base_url);
-    $filter_url = $status_filter === 'not_done' ? $base_url : $not_done_url;
-
     return [
-        'nonce'       => wp_create_nonce('dca_acf_textblock_nonce'),
-        'filterUrl'   => esc_url_raw($filter_url),
-        'filterLabel' => $status_filter === 'not_done' ? 'Toon alles' : 'Verberg vandaag bijgewerkt',
+        'nonce'          => wp_create_nonce('dca_acf_textblock_nonce'),
+        'filterUrl'      => esc_url_raw($filter_url),
+        'filterLabel'    => $filter_label,
         'ajaxUrl'        => admin_url('admin-ajax.php'),
         'maxImportBytes' => DCA_TB_MAX_IMPORT_BYTES,
+        'objectType'     => $object_type,
+        'taxonomy'       => $taxonomy,
     ];
 }
 
@@ -3523,20 +4394,10 @@ add_action('admin_notices', function () {
     echo '<div class="notice notice-warning"><p>' . esc_html__('Content Sync Manager: ACF is niet actief of niet volledig beschikbaar. Pagina- en productimports met ACF-velden worden geblokkeerd totdat ACF actief is. Berichtimports blijven beschikbaar.', 'content-sync-manager') . '</p></div>';
 });
 
-add_action('admin_footer-edit.php', function () {
-    $screen = get_current_screen();
-    $post_type = ($screen && isset($screen->post_type)) ? sanitize_key((string) $screen->post_type) : '';
-
-    if (
-        !$screen ||
-        $screen->base !== 'edit' ||
-        $post_type === '' ||
-        !dca_tb_is_supported_post_type($post_type) ||
-        !dca_tb_current_user_can_use_manager()
-    ) {
+function dca_tb_render_admin_modals() {
+    if (!dca_tb_should_load_admin_ui() || !dca_tb_current_user_can_use_manager()) {
         return;
     }
-
 
     $html = <<<'HTML'
     <div class="dca-modal" id="dca-single-modal" role="dialog" aria-modal="true" aria-labelledby="dca-single-title" aria-hidden="true">
@@ -3587,7 +4448,7 @@ add_action('admin_footer-edit.php', function () {
                     <button type="button" class="button dca-close-import">Sluiten</button>
                 </div>
                 <div class="dca-content">
-                    <p class="dca-warning">Gebruik een TXT-bestand dat via “Exporteer als .txt” is gemaakt. Controleer het bestand verplicht vóór import. Berichten, pagina’s en producten met een standaardtemplate worden verwerkt; Elementor Canvas en Elementor Full Width worden overgeslagen. Import kan content, ACF-data, media metadata en fysieke mediabestandsnamen wijzigen. De contentimport schrijft geen SEO-meta.</p>
+                    <p class="dca-warning">Gebruik een TXT-bestand dat via “Exporteer als .txt” is gemaakt. Controleer het bestand verplicht vóór import. Berichten, pagina’s en producten met een standaardtemplate worden verwerkt; Elementor Canvas en Elementor Full Width worden overgeslagen. Import kan content, ACF-data, categorievelden, Yoast metabeschrijvingen, media metadata en fysieke mediabestandsnamen wijzigen.</p>
                     <label class="screen-reader-text" for="dca-import-file">TXT-bestand kiezen</label>
                     <input type="file" id="dca-import-file" accept=".txt,text/plain">
                     <div class="dca-actions">
@@ -3603,4 +4464,6 @@ add_action('admin_footer-edit.php', function () {
         <div class="dca-toast" id="dca-toast" role="status" aria-live="polite" aria-atomic="true"></div>
     HTML;
     echo $html; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
-});
+}
+add_action('admin_footer-edit.php', 'dca_tb_render_admin_modals');
+add_action('admin_footer-edit-tags.php', 'dca_tb_render_admin_modals');

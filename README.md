@@ -49,9 +49,17 @@ Zet oude Code Snippets/WPCode-versies of oude pluginvarianten eerst uit voordat 
 
 ## Versie
 
-1.2.55
+1.2.57
 
 ## Changelog
+
+### 1.2.57
+- Yoast metabeschrijving voor categorieën/productcategorieën schoon opgeslagen via termmeta én Yoast taxonomy-meta fallback.
+- Kleine opschoning in admin body-class en import/export-resultaatvelden.
+
+### 1.2.56
+- Export/import uitgebreid met Yoast metabeschrijving voor berichten, pagina’s, producten, categorieën en productcategorieën.
+- Tekstblokbeheer toegevoegd voor categorieën en productcategorieën.
 
 ### 1.2.55
 - Controlefix: ongebruikte server-side preload-AJAX-route verwijderd zodat de refactorclaim klopt met de code.

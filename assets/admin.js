@@ -4,6 +4,8 @@ document.addEventListener('DOMContentLoaded', function () {
     const filterUrl = dcaSettings.filterUrl;
     const filterLabel = dcaSettings.filterLabel;
     const ajaxUrl = window.ajaxurl || dcaSettings.ajaxUrl || '';
+    const objectType = dcaSettings.objectType || 'post';
+    const taxonomy = dcaSettings.taxonomy || '';
     const $ = (selector) => document.querySelector(selector);
     const $$ = (selector) => Array.from(document.querySelectorAll(selector));
 
@@ -45,11 +47,14 @@ document.addEventListener('DOMContentLoaded', function () {
             bar.appendChild(button);
         });
 
-        const link = document.createElement('a');
-        link.className = 'button dca-toolbar-filter';
-        link.href = filterUrl || '#';
-        link.textContent = filterLabel || 'Filter';
-        bar.appendChild(link);
+        if (filterUrl) {
+            const link = document.createElement('a');
+            link.className = 'button dca-toolbar-filter';
+            link.href = filterUrl;
+            link.textContent = filterLabel || 'Filter';
+            bar.appendChild(link);
+        }
+
         document.body.appendChild(bar);
     }
 
@@ -131,7 +136,7 @@ document.addEventListener('DOMContentLoaded', function () {
         return;
     }
 
-    let currentPostId = null;
+    let currentObject = null;
     let singleFilename = 'content-sync.txt';
     let bulkFilename = 'content-sync.txt';
     let importTxt = '';
@@ -305,8 +310,14 @@ document.addEventListener('DOMContentLoaded', function () {
         URL.revokeObjectURL(url);
     }
 
+    function rowCheckboxSelector() {
+        return objectType === 'term'
+            ? 'tbody th.check-column input[type="checkbox"][name="delete_tags[]"]'
+            : 'tbody th.check-column input[type="checkbox"][name="post[]"]';
+    }
+
     function selectedIds() {
-        return $$('tbody th.check-column input[type="checkbox"][name="post[]"]:checked').map((checkbox) => checkbox.value);
+        return $$(rowCheckboxSelector() + ':checked').map((checkbox) => checkbox.value);
     }
 
     function slug(value) {
@@ -325,7 +336,7 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     function deselectAll() {
-        $$('tbody th.check-column input[type="checkbox"][name="post[]"], #cb-select-all-1, #cb-select-all-2').forEach((checkbox) => {
+        $$(rowCheckboxSelector() + ', #cb-select-all-1, #cb-select-all-2').forEach((checkbox) => {
             checkbox.checked = false;
             checkbox.indeterminate = false;
         });
@@ -333,7 +344,7 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     document.addEventListener('change', (event) => {
-        if (event.target.matches('input[type="checkbox"][name="post[]"], #cb-select-all-1, #cb-select-all-2')) {
+        if (event.target.matches(rowCheckboxSelector() + ', #cb-select-all-1, #cb-select-all-2')) {
             setTimeout(updateSelectionToast, 40);
         }
     });
@@ -439,7 +450,8 @@ document.addEventListener('DOMContentLoaded', function () {
             const targetCell = document.createElement('td');
             const statusCell = document.createElement('td');
             const statusClass = rowItem.status === 'success' ? 'dca-ok' : (rowItem.status === 'partial' ? 'dca-partial' : 'dca-error');
-            const target = rowItem.target_title ? rowItem.target_title + ' (#' + (rowItem.target_post_id || 0) + ')' : 'Niet gevonden';
+            const targetId = rowItem.target_id || rowItem.target_post_id || 0;
+            const target = rowItem.target_title ? rowItem.target_title + ' (#' + targetId + ')' : 'Niet gevonden';
 
             sourceTitle.textContent = rowItem.source_title || 'Onbekend item';
             sourceCell.appendChild(sourceTitle);
@@ -460,10 +472,42 @@ document.addEventListener('DOMContentLoaded', function () {
         box.style.display = 'block';
     }
 
+    function currentObjectKey() {
+        if (!currentObject) {
+            return '';
+        }
+
+        return [currentObject.type, currentObject.taxonomy || '', currentObject.id].join(':');
+    }
+
+    function currentObjectPayload() {
+        if (!currentObject) {
+            return {};
+        }
+
+        if (currentObject.type === 'term') {
+            return {
+                object_type: 'term',
+                term_id: currentObject.id,
+                taxonomy: currentObject.taxonomy,
+            };
+        }
+
+        return {
+            object_type: 'post',
+            post_id: currentObject.id,
+        };
+    }
+
     $$('.dca-open-acf-textblock').forEach((button) => button.addEventListener('click', function () {
-        currentPostId = this.dataset.postId;
+        const buttonObjectType = this.dataset.objectType === 'term' ? 'term' : 'post';
+        currentObject = buttonObjectType === 'term'
+            ? { type: 'term', id: this.dataset.termId, taxonomy: this.dataset.taxonomy || taxonomy }
+            : { type: 'post', id: this.dataset.postId, taxonomy: '' };
+
+        const cacheKey = currentObjectKey();
         status(singleStatus, '', '');
-        singleFilename = 'content-sync-' + currentPostId + '.txt';
+        singleFilename = 'content-sync-' + currentObject.id + '.txt';
 
         const fill = (data) => {
             singleTitle.textContent = data.title;
@@ -471,13 +515,14 @@ document.addEventListener('DOMContentLoaded', function () {
             singleOut.value = data.text;
             singleInitial = data.text;
             singleView.href = data.view_url || '#';
+            singleView.style.display = data.view_url ? '' : 'none';
             open(singleModal);
             singleOut.focus();
             singleOut.select();
         };
 
-        if (cache[currentPostId]) {
-            fill(cache[currentPostId]);
+        if (cache[cacheKey]) {
+            fill(cache[cacheKey]);
             return;
         }
 
@@ -486,13 +531,13 @@ document.addEventListener('DOMContentLoaded', function () {
         singleInitial = singleOut.value;
         open(singleModal);
 
-        ajax('dca_get_acf_textblock', { post_id: currentPostId }).then((response) => {
+        ajax('dca_get_acf_textblock', currentObjectPayload()).then((response) => {
             if (!response || !response.success) {
                 singleOut.value = response && response.data && response.data.message ? response.data.message : 'Er ging iets mis.';
                 return;
             }
 
-            cache[currentPostId] = response.data;
+            cache[cacheKey] = response.data;
             fill(response.data);
         }).catch(() => {
             singleOut.value = 'Er ging iets mis.';
@@ -500,8 +545,8 @@ document.addEventListener('DOMContentLoaded', function () {
     }));
 
     singleSave.addEventListener('click', function () {
-        if (!currentPostId) {
-            status(singleStatus, 'Geen pagina geselecteerd.', 'is-error');
+        if (!currentObject) {
+            status(singleStatus, 'Geen item geselecteerd.', 'is-error');
             return;
         }
 
@@ -512,11 +557,10 @@ document.addEventListener('DOMContentLoaded', function () {
         this.disabled = true;
         status(singleStatus, 'Back-up maken en opslaan...', '');
 
-        ajax('dca_save_acf_textblock', {
-            post_id: currentPostId,
+        ajax('dca_save_acf_textblock', Object.assign(currentObjectPayload(), {
             textblock: singleOut.value,
             destructive_confirm: '1',
-        }).then((response) => {
+        })).then((response) => {
             this.disabled = false;
 
             if (!response || !response.success) {
@@ -525,13 +569,13 @@ document.addEventListener('DOMContentLoaded', function () {
             }
 
             singleInitial = singleOut.value;
-            cache[currentPostId] = {
+            cache[currentObjectKey()] = {
                 title: singleTitle.textContent,
                 text: singleOut.value,
                 view_url: singleView.href,
             };
             status(singleStatus, response.data.message || 'Opgeslagen.', 'is-success');
-            reloadList('Pagina opgeslagen');
+            reloadList(currentObject.type === 'term' ? 'Categorie opgeslagen' : 'Pagina opgeslagen');
         }).catch(() => {
             this.disabled = false;
             status(singleStatus, 'Opslaan mislukt.', 'is-error');
@@ -560,11 +604,16 @@ document.addEventListener('DOMContentLoaded', function () {
             return Promise.reject();
         }
 
-        if (ids.length > 50 && !confirm('Je hebt ' + ids.length + ' pagina’s geselecteerd. Dit kan zwaar zijn voor de server. Toch doorgaan?')) {
+        if (ids.length > 50 && !confirm('Je hebt ' + ids.length + ' items geselecteerd. Dit kan zwaar zijn voor de server. Toch doorgaan?')) {
             return Promise.reject();
         }
 
-        return ajax('dca_bulk_get_acf_textblocks', { post_ids: ids });
+        return ajax('dca_bulk_get_acf_textblocks', {
+            object_type: objectType,
+            taxonomy,
+            object_ids: ids,
+            post_ids: ids,
+        });
     }
 
     function resetBulkCheck() {
@@ -680,7 +729,7 @@ document.addEventListener('DOMContentLoaded', function () {
             return;
         }
 
-        if (!confirm('Weet je zeker dat je deze gecontroleerde bulk-tekst wilt opslaan? Geldige items kunnen bestaande content, ACF- en media-data wijzigen. Items met fouten worden overgeslagen. Per geïmporteerd item wordt automatisch eerst een back-up gemaakt.')) {
+        if (!confirm('Weet je zeker dat je deze gecontroleerde bulk-tekst wilt opslaan? Geldige items kunnen bestaande content, ACF-, SEO-, categorie- en media-data wijzigen. Items met fouten worden overgeslagen. Per geïmporteerd item wordt automatisch eerst een back-up gemaakt.')) {
             return;
         }
 
@@ -839,7 +888,7 @@ document.addEventListener('DOMContentLoaded', function () {
             return;
         }
 
-        if (!confirm('Weet je zeker dat je dit gecontroleerde TXT-bestand wilt importeren? Geldige items kunnen bestaande content, ACF- en media-data wijzigen. Items met fouten worden overgeslagen. Per geïmporteerd item wordt automatisch eerst een back-up gemaakt.')) {
+        if (!confirm('Weet je zeker dat je dit gecontroleerde TXT-bestand wilt importeren? Geldige items kunnen bestaande content, ACF-, SEO-, categorie- en media-data wijzigen. Items met fouten worden overgeslagen. Per geïmporteerd item wordt automatisch eerst een back-up gemaakt.')) {
             return;
         }
 
