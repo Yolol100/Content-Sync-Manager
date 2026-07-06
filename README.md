@@ -49,9 +49,13 @@ Zet oude Code Snippets/WPCode-versies of oude pluginvarianten eerst uit voordat 
 
 ## Versie
 
-1.2.57
+1.2.58
 
 ## Changelog
+
+### 1.2.58
+- Packagingfix: hoofdpluginbestand hersteld met geldige WordPress-pluginheader, bootstrapconstants en include naar `includes/manager.php`.
+- Veiligheidsfix: laden wordt geblokkeerd met adminmelding wanneer een oude snippet/pluginversie dezelfde globale functies al actief heeft.
 
 ### 1.2.57
 - Yoast metabeschrijving voor categorieën/productcategorieën schoon opgeslagen via termmeta én Yoast taxonomy-meta fallback.

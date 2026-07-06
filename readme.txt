@@ -4,7 +4,7 @@ Tags: admin, acf, import, export
 Requires at least: 6.2
 Tested up to: 6.2
 Requires PHP: 7.4
-Stable tag: 1.2.57
+Stable tag: 1.2.58
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -24,6 +24,10 @@ Deze private plugin voegt een compacte admin bulkeditor toe voor pagina's, beric
 4. Test eerst export, preview en daarna import.
 
 == Changelog ==
+
+= 1.2.58 =
+* Packagingfix: hoofdpluginbestand hersteld met geldige WordPress-pluginheader, bootstrapconstants en include naar includes/manager.php.
+* Veiligheidsfix: laden wordt geblokkeerd met adminmelding wanneer een oude snippet/pluginversie dezelfde globale functies al actief heeft.
 
 = 1.2.57 =
 * Yoast metabeschrijving voor categorieën/productcategorieën schoon opgeslagen via termmeta en Yoast taxonomy-meta fallback.
