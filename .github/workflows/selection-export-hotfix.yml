@@ -1,0 +1,98 @@
+name: Apply selection export hotfix
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/selection-export-hotfix.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch-and-verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          fetch-depth: 0
+
+      - name: Apply surgical hotfix
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 <<'PY'
+          from pathlib import Path
+
+          def replace_once(path, old, new):
+              p = Path(path)
+              text = p.read_text(encoding='utf-8')
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f'{path}: expected exactly one match, found {count}')
+              p.write_text(text.replace(old, new, 1), encoding='utf-8')
+
+          replace_once(
+              'assets/admin.js',
+              """        return objectType === 'term'\n            ? 'tbody th.check-column input[type=\"checkbox\"][name=\"delete_tags[]\"]'\n            : 'tbody th.check-column input[type=\"checkbox\"][name=\"post[]\"]';""",
+              """        return objectType === 'term'\n            ? 'input[type=\"checkbox\"][name=\"delete_tags[]\"]'\n            : 'input[type=\"checkbox\"][name=\"post[]\"]';""",
+          )
+
+          replace_once('content-sync-manager.php', ' * Version: 1.2.60', ' * Version: 1.2.61')
+          replace_once("content-sync-manager.php", "define('DCA_TB_VERSION', '1.2.60');", "define('DCA_TB_VERSION', '1.2.61');")
+
+          replace_once('readme.txt', 'Stable tag: 1.2.60', 'Stable tag: 1.2.61')
+          replace_once(
+              'readme.txt',
+              """== Changelog ==\n\n= 1.2.60 =""",
+              """== Changelog ==\n\n= 1.2.61 =\n* Fix: selectie voor TXT-export leest de WordPress post[]/delete_tags[]-vakjes direct en is niet meer afhankelijk van een th.check-column-wrapper.\n* Cache: pluginversie verhoogd zodat de aangepaste admin-JavaScript direct met een nieuwe assetversie wordt geladen.\n* Quality: regressiecheck aangescherpt voor robuuste selectie van berichten, producten, pagina's en termen.\n\n= 1.2.60 =""",
+          )
+
+          replace_once('README.md', '## Versie\n\n1.2.60', '## Versie\n\n1.2.61')
+          replace_once(
+              'README.md',
+              """## Changelog\n\n### 1.2.60""",
+              """## Changelog\n\n### 1.2.61\n- Fix: selectie voor TXT-export leest de WordPress `post[]`/`delete_tags[]`-vakjes direct en is niet meer afhankelijk van een `th.check-column`-wrapper.\n- Cache: pluginversie verhoogd zodat de aangepaste admin-JavaScript direct met een nieuwe assetversie wordt geladen.\n- Quality: regressiecheck aangescherpt voor robuuste selectie van berichten, producten, pagina's en termen.\n\n### 1.2.60""",
+          )
+
+          replace_once(
+              'tests/static-audit.php',
+              "$assert(strpos($adminJs, 'delete_tags[]') !== false, 'Term selection checkbox support is missing.');\n$assert(strpos($adminJs, 'name=\"post[]\"') !== false, 'Post/page selection checkbox support is missing.');",
+              "$assert(strpos($adminJs, 'input[type=\"checkbox\"][name=\"delete_tags[]\"]') !== false, 'Term selection checkbox support is missing.');\n$assert(strpos($adminJs, 'input[type=\"checkbox\"][name=\"post[]\"]') !== false, 'Post/page selection checkbox support is missing.');\n$assert(strpos($adminJs, 'tbody th.check-column input[type=\"checkbox\"]') === false, 'Selection must not depend on a th.check-column wrapper.');",
+          )
+
+          Path('.github/workflows/selection-export-hotfix.yml').unlink()
+          PY
+
+      - name: JavaScript syntax
+        run: node --check assets/admin.js
+
+      - name: PHP syntax
+        shell: bash
+        run: |
+          set -euo pipefail
+          while IFS= read -r -d '' file; do
+            php -l "$file"
+          done < <(find . -type f -name '*.php' -not -path './.git/*' -print0)
+
+      - name: Static regression audit
+        run: php tests/static-audit.php
+
+      - name: Verify surgical diff
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --check
+          git diff -- assets/admin.js content-sync-manager.php readme.txt README.md tests/static-audit.php .github/workflows/selection-export-hotfix.yml
+
+      - name: Commit verified hotfix to main
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'Webactueel Quality Bot'
+          git config user.email 'actions@users.noreply.github.com'
+          git add assets/admin.js content-sync-manager.php readme.txt README.md tests/static-audit.php .github/workflows/selection-export-hotfix.yml
+          git commit -m 'Fix selected item detection for TXT export'
+          git push origin HEAD:main
