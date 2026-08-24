@@ -1,0 +1,45 @@
+name: Package plugin download
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/package-download.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  package:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+
+      - name: Build installable plugin ZIP
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p build/content-sync-manager/assets build/content-sync-manager/includes
+          cp content-sync-manager.php build/content-sync-manager/
+          cp uninstall.php build/content-sync-manager/
+          cp readme.txt build/content-sync-manager/
+          cp README.md build/content-sync-manager/
+          cp LICENSE build/content-sync-manager/
+          cp assets/admin.css build/content-sync-manager/assets/
+          cp assets/admin.js build/content-sync-manager/assets/
+          cp includes/manager.php build/content-sync-manager/includes/
+          grep -q 'Version: 1.2.61' build/content-sync-manager/content-sync-manager.php
+          grep -q "define('DCA_TB_VERSION', '1.2.61')" build/content-sync-manager/content-sync-manager.php
+          (cd build && zip -r ../content-sync-manager-1.2.61.zip content-sync-manager)
+          unzip -l content-sync-manager-1.2.61.zip
+
+      - name: Upload plugin ZIP
+        uses: actions/upload-artifact@v4
+        with:
+          name: content-sync-manager-1.2.61
+          path: content-sync-manager-1.2.61.zip
+          if-no-files-found: error
+          retention-days: 1
