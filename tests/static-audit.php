@@ -32,6 +32,8 @@ $bootstrap = $read('content-sync-manager.php');
 $manager = $read('includes/manager.php');
 $adminJs = $read('assets/admin.js');
 $readme = $read('readme.txt');
+$readmeMd = $read('README.md');
+$workflow = $read('.github/workflows/quality.yml');
 $read('assets/admin.css');
 $read('uninstall.php');
 
@@ -43,8 +45,12 @@ $assert(strpos($bootstrap, "function_exists('dca_tb_current_user_can_use_manager
 preg_match('/\* Version:\s*([0-9.]+)/', $bootstrap, $headerVersion);
 preg_match("/define\('DCA_TB_VERSION',\s*'([^']+)'\)/", $bootstrap, $constantVersion);
 preg_match('/Stable tag:\s*([^\r\n]+)/', $readme, $stableTag);
+preg_match('/## Versie\s+([0-9.]+)/s', $readmeMd, $readmeMdVersion);
 $assert(isset($headerVersion[1], $constantVersion[1]) && $headerVersion[1] === $constantVersion[1], 'Plugin header version and DCA_TB_VERSION must match.');
 $assert(isset($headerVersion[1], $stableTag[1]) && trim($stableTag[1]) === $headerVersion[1], 'readme Stable tag must match plugin version.');
+$assert(isset($headerVersion[1], $readmeMdVersion[1]) && $readmeMdVersion[1] === $headerVersion[1], 'README version must match plugin version.');
+$assert(isset($headerVersion[1]) && strpos($readme, '= ' . $headerVersion[1] . ' =') !== false, 'readme changelog must contain current plugin version.');
+$assert(isset($headerVersion[1]) && strpos($readmeMd, '### ' . $headerVersion[1]) !== false, 'README changelog must contain current plugin version.');
 
 $assert(!is_file($root . '/admin.js'), 'Misplaced root admin.js must not exist.');
 $assert(!is_file($root . '/manager.php'), 'Misplaced root manager.php must not exist.');
@@ -60,6 +66,12 @@ $assert(strpos($adminJs, "ajax('dca_bulk_get_acf_textblocks'") !== false, 'Clien
 $assert(strpos($adminJs, "new Blob([text], { type: 'text/plain;charset=utf-8' })") !== false, 'TXT Blob download implementation is missing.');
 $assert(strpos($adminJs, 'delete_tags[]') !== false, 'Term selection checkbox support is missing.');
 $assert(strpos($adminJs, 'name="post[]"') !== false, 'Post/page selection checkbox support is missing.');
+
+$assert(preg_match('/uses:\s*actions\/checkout@[0-9a-f]{40}/', $workflow) === 1, 'Checkout action must be pinned to a full commit SHA.');
+$assert(preg_match('/uses:\s*shivammathur\/setup-php@[0-9a-f]{40}/', $workflow) === 1, 'Setup PHP action must be pinned to a full commit SHA.');
+$assert(strpos($workflow, 'persist-credentials: false') !== false, 'Checkout credentials must not persist in the quality job.');
+$assert(strpos($workflow, 'permissions:') !== false && strpos($workflow, 'contents: read') !== false, 'Quality workflow must keep read-only repository permissions.');
+$assert(strpos($workflow, 'timeout-minutes: 10') !== false, 'Quality job must have a bounded timeout.');
 
 $forbiddenPatterns = [
     '/(^|\/)\.env($|\.)/',
