@@ -49,9 +49,14 @@ Zet oude Code Snippets/WPCode-versies of oude pluginvarianten eerst uit voordat 
 
 ## Versie
 
-1.2.58
+1.2.59
 
 ## Changelog
+
+### 1.2.59
+- Fix: admin-assets worden voor gebruikers zonder managerrechten geblokkeerd, zodat geen zichtbare maar inactieve exportknoppen ontstaan wanneer de server-side modals terecht ontbreken.
+- Packaging: fout geplaatste rootbestanden `admin.js` en `manager.php` verwijderd; de canonieke bestanden blijven in `assets/` en `includes/`.
+- Quality: regressietest en GitHub Actions-gate toegevoegd voor PHP-syntax, JavaScript-syntax, exportcontracten, versiepariteit en package-hygiene.
 
 ### 1.2.58
 - Packagingfix: hoofdpluginbestand hersteld met geldige WordPress-pluginheader, bootstrapconstants en include naar `includes/manager.php`.
