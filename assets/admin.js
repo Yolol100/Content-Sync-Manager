@@ -24,6 +24,7 @@ document.addEventListener('DOMContentLoaded', function () {
             ['dca-copy-selected', 'Kopieer selectie', 'button'],
             ['dca-export-selected', 'Export selectie .txt', 'button'],
             ['dca-open-empty-bulk', 'Bulkeditor', 'button'],
+            ['dca-select-all', 'Selecteer alles', 'button'],
             ['dca-deselect-selected', 'Deselecteer alles', 'button'],
             ['dca-open-import', 'Import .txt', 'button button-primary'],
             ['dca-restore-last-import', 'Herstel laatste import', 'button'],
@@ -92,6 +93,7 @@ document.addEventListener('DOMContentLoaded', function () {
     const toolbarCopy = $('#dca-copy-selected');
     const toolbarBulk = $('#dca-open-empty-bulk');
     const toolbarExport = $('#dca-export-selected');
+    const toolbarSelectAll = $('#dca-select-all');
     const toolbarDeselect = $('#dca-deselect-selected');
     const toolbarImport = $('#dca-open-import');
     const toolbarRestore = $('#dca-restore-last-import');
@@ -126,6 +128,7 @@ document.addEventListener('DOMContentLoaded', function () {
         toolbarCopy,
         toolbarBulk,
         toolbarExport,
+        toolbarSelectAll,
         toolbarDeselect,
         toolbarImport,
         toolbarRestore,
@@ -335,6 +338,22 @@ document.addEventListener('DOMContentLoaded', function () {
         showToast('Content Sync: ' + selectedIds().length + ' geselecteerd');
     }
 
+    function selectAll() {
+        const rowCheckboxes = $$(rowCheckboxSelector());
+
+        rowCheckboxes.forEach((checkbox) => {
+            checkbox.checked = true;
+            checkbox.indeterminate = false;
+        });
+
+        $$('#cb-select-all-1, #cb-select-all-2').forEach((checkbox) => {
+            checkbox.checked = rowCheckboxes.length > 0;
+            checkbox.indeterminate = false;
+        });
+
+        updateSelectionToast();
+    }
+
     function deselectAll() {
         $$(rowCheckboxSelector() + ', #cb-select-all-1, #cb-select-all-2').forEach((checkbox) => {
             checkbox.checked = false;
@@ -347,6 +366,11 @@ document.addEventListener('DOMContentLoaded', function () {
         if (event.target.matches(rowCheckboxSelector() + ', #cb-select-all-1, #cb-select-all-2')) {
             setTimeout(updateSelectionToast, 40);
         }
+    });
+
+    toolbarSelectAll.addEventListener('click', (event) => {
+        event.preventDefault();
+        selectAll();
     });
 
     toolbarDeselect.addEventListener('click', (event) => {
