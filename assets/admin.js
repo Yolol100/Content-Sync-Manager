@@ -315,8 +315,8 @@ document.addEventListener('DOMContentLoaded', function () {
 
     function rowCheckboxSelector() {
         return objectType === 'term'
-            ? 'tbody th.check-column input[type="checkbox"][name="delete_tags[]"]'
-            : 'tbody th.check-column input[type="checkbox"][name="post[]"]';
+            ? 'input[type="checkbox"][name="delete_tags[]"]'
+            : 'input[type="checkbox"][name="post[]"]';
     }
 
     function selectedIds() {

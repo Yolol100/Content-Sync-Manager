@@ -65,8 +65,9 @@ $assert(strpos($manager, "if (\$post->post_type === 'page' && dca_tb_template_sk
 $assert(strpos($adminJs, "ajax('dca_get_acf_textblock'") !== false, 'Client single export action does not match server route.');
 $assert(strpos($adminJs, "ajax('dca_bulk_get_acf_textblocks'") !== false, 'Client bulk export action does not match server route.');
 $assert(strpos($adminJs, "new Blob([text], { type: 'text/plain;charset=utf-8' })") !== false, 'TXT Blob download implementation is missing.');
-$assert(strpos($adminJs, 'delete_tags[]') !== false, 'Term selection checkbox support is missing.');
-$assert(strpos($adminJs, 'name="post[]"') !== false, 'Post/page selection checkbox support is missing.');
+$assert(strpos($adminJs, 'input[type="checkbox"][name="delete_tags[]"]') !== false, 'Term selection checkbox support is missing.');
+$assert(strpos($adminJs, 'input[type="checkbox"][name="post[]"]') !== false, 'Post/page selection checkbox support is missing.');
+$assert(strpos($adminJs, 'tbody th.check-column input[type="checkbox"]') === false, 'Selection must not depend on a th.check-column wrapper.');
 $assert(strpos($adminJs, "['dca-select-all', 'Selecteer alles', 'button']") !== false, 'Select-all toolbar action is missing.');
 $assert(strpos($adminJs, 'function selectAll()') !== false, 'Select-all implementation is missing.');
 $assert(strpos($adminJs, "toolbarSelectAll.addEventListener('click'") !== false, 'Select-all click handler is missing.');

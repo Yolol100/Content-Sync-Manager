@@ -4,7 +4,7 @@ Tags: admin, acf, import, export
 Requires at least: 6.2
 Tested up to: 6.2
 Requires PHP: 7.4
-Stable tag: 1.2.60
+Stable tag: 1.2.61
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -24,6 +24,11 @@ Deze private plugin voegt een compacte admin bulkeditor toe voor pagina's, beric
 4. Test eerst export, preview en daarna import.
 
 == Changelog ==
+
+= 1.2.61 =
+* Fix: selectie voor TXT-export leest de WordPress post[]/delete_tags[]-vakjes direct en is niet meer afhankelijk van een th.check-column-wrapper.
+* Cache: pluginversie verhoogd zodat de aangepaste admin-JavaScript direct met een nieuwe assetversie wordt geladen.
+* Quality: regressiecheck aangescherpt voor robuuste selectie van berichten, producten, pagina's en termen.
 
 = 1.2.60 =
 * UI: knop Selecteer alles toegevoegd aan de Content Sync-toolbar voor berichten, pagina's, producten en ondersteunde termen.
