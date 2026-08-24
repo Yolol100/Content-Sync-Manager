@@ -66,6 +66,11 @@ $assert(strpos($adminJs, "ajax('dca_bulk_get_acf_textblocks'") !== false, 'Clien
 $assert(strpos($adminJs, "new Blob([text], { type: 'text/plain;charset=utf-8' })") !== false, 'TXT Blob download implementation is missing.');
 $assert(strpos($adminJs, 'delete_tags[]') !== false, 'Term selection checkbox support is missing.');
 $assert(strpos($adminJs, 'name="post[]"') !== false, 'Post/page selection checkbox support is missing.');
+$assert(strpos($adminJs, "['dca-select-all', 'Selecteer alles', 'button']") !== false, 'Select-all toolbar action is missing.');
+$assert(strpos($adminJs, 'function selectAll()') !== false, 'Select-all implementation is missing.');
+$assert(strpos($adminJs, "toolbarSelectAll.addEventListener('click'") !== false, 'Select-all click handler is missing.');
+$assert(strpos($adminJs, 'checkbox.checked = true;') !== false, 'Select-all action must actually select list rows.');
+$assert(strpos($adminJs, "toolbarExport.addEventListener('click', () => fetchBulk()") !== false, 'Toolbar export must continue to export the current selection directly.');
 
 $assert(preg_match('/uses:\s*actions\/checkout@[0-9a-f]{40}/', $workflow) === 1, 'Checkout action must be pinned to a full commit SHA.');
 $assert(preg_match('/uses:\s*shivammathur\/setup-php@[0-9a-f]{40}/', $workflow) === 1, 'Setup PHP action must be pinned to a full commit SHA.');
