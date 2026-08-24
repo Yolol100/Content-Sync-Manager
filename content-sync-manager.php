@@ -38,3 +38,15 @@ add_action('plugins_loaded', static function () {
 });
 
 require_once DCA_TB_PLUGIN_DIR . 'includes/manager.php';
+
+/*
+ * Keep the client-side manager and the server-rendered modals on the same
+ * capability boundary. Without this guard a lower-privilege user could receive
+ * the JavaScript toolbar while dca_tb_render_admin_modals() correctly withheld
+ * the modal markup, causing the script to abort with visible but inert buttons.
+ */
+add_action('admin_enqueue_scripts', static function () {
+    if (function_exists('dca_tb_current_user_can_use_manager') && !dca_tb_current_user_can_use_manager()) {
+        remove_action('admin_enqueue_scripts', 'dca_tb_enqueue_admin_assets');
+    }
+}, 0);
