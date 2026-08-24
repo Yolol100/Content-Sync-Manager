@@ -49,9 +49,14 @@ Zet oude Code Snippets/WPCode-versies of oude pluginvarianten eerst uit voordat 
 
 ## Versie
 
-1.2.59
+1.2.60
 
 ## Changelog
+
+### 1.2.60
+- UI: knop `Selecteer alles` toegevoegd aan de Content Sync-toolbar voor berichten, pagina's, producten en ondersteunde termen.
+- Export: `Export selectie .txt` gebruikt direct alle via de lijst aangevinkte items; de nieuwe selectieknop zet ook de WordPress select-all-vakjes consistent aan.
+- Quality: regressiechecks toegevoegd voor de selectieknop, de selectie-handler en de bestaande directe bulkexport.
 
 ### 1.2.59
 - Fix: admin-assets worden voor gebruikers zonder managerrechten geblokkeerd, zodat geen zichtbare maar inactieve exportknoppen ontstaan wanneer de server-side modals terecht ontbreken.
