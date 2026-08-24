@@ -60,6 +60,7 @@ $assert(strpos($manager, "check_ajax_referer('dca_acf_textblock_nonce', 'nonce',
 $assert(strpos($manager, "wp_ajax_dca_get_acf_textblock") !== false, 'Single export AJAX route is missing.');
 $assert(strpos($manager, "wp_ajax_dca_bulk_get_acf_textblocks") !== false, 'Bulk export AJAX route is missing.');
 $assert(strpos($manager, "'filename' => 'content-sync-' ") !== false, 'Bulk TXT filename response contract is missing.');
+$assert(strpos($manager, "if (\$post->post_type === 'page' && dca_tb_template_skip_reason(\$post_id) !== '')") !== false, 'Bulk export template restriction must apply only to pages so posts and products are not silently skipped.');
 
 $assert(strpos($adminJs, "ajax('dca_get_acf_textblock'") !== false, 'Client single export action does not match server route.');
 $assert(strpos($adminJs, "ajax('dca_bulk_get_acf_textblocks'") !== false, 'Client bulk export action does not match server route.');
