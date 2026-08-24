@@ -321,7 +321,6 @@ function dca_tb_today_start_timestamp() {
 function dca_tb_get_list_status_filter() {
     $status = isset($_GET['dca_tb_status']) ? sanitize_key(wp_unslash($_GET['dca_tb_status'])) : '';
 
-    // Backwards compatibility met de oude toolbar-link.
     $legacy_unupdated = isset($_GET['dca_unupdated']) ? sanitize_text_field(wp_unslash($_GET['dca_unupdated'])) : '';
     if ($status === '' && $legacy_unupdated !== '') {
         $status = 'not_done';
@@ -347,8 +346,6 @@ function dca_tb_apply_standard_template_filter_where($where, $query) {
     $blocked = ['elementor_canvas', 'elementor_header_footer'];
     $blocked_sql = "'" . implode("','", array_map('esc_sql', $blocked)) . "'";
 
-    // Houd de templatefilter bewust licht. Geen LIKE op geserialiseerde Elementor settings,
-    // omdat dat grote adminlijsten kan laten vastlopen. We sluiten alleen expliciete template-meta uit.
     if ($post_type === 'page') {
         $where .= " AND NOT EXISTS (
             SELECT 1 FROM {$wpdb->postmeta} dca_tpl_page_custom
@@ -387,8 +384,6 @@ add_action('pre_get_posts', function ($q) {
     $today_start = dca_tb_today_start_timestamp();
 
     if ($status === 'not_done') {
-        // Toon alleen items die vandaag nog niet zijn bijgewerkt/geimporteerd:
-        // geen datum, of een datum ouder dan vandaag.
         $meta_query[] = [
             'relation' => 'OR',
             [
@@ -405,7 +400,6 @@ add_action('pre_get_posts', function ($q) {
     }
 
     if ($status === 'done_today') {
-        // Toon alleen items die vandaag al zijn bijgewerkt/geimporteerd.
         $meta_query[] = [
             'key'     => '_dca_acf_textblock_updated_at',
             'value'   => $today_start,
@@ -415,7 +409,6 @@ add_action('pre_get_posts', function ($q) {
     }
 
     if ($template_filter === 'standard') {
-        // Toon alleen standaardtemplates zonder zware WP_Meta_Query JOINs.
         $q->set('dca_tb_standard_template_filter', $post_type);
     }
 
@@ -620,7 +613,6 @@ function dca_tb_content_badge($post_id) {
     }
 
     if (DCA_TB_LIGHT_ADMIN_LIST) {
-        // Voorkom zware ACF/media/Elementor-detectie per rij in de adminlijst.
         return '<span class="dca-badge dca-badge-muted">Snelle lijstweergave</span>';
     }
 
@@ -733,7 +725,6 @@ function dca_tb_has_elementor_nonstandard_layout($post_id) {
         'elementor_header_footer',
     ];
 
-    // Elementor Canvas / Full Width kan via de normale paginatemplate of via Elementor page settings zijn opgeslagen.
     $wp_template_meta = get_post_meta($post_id, '_wp_page_template', true);
 
     if (dca_tb_array_contains_value($wp_template_meta, $blocked)) {
@@ -800,7 +791,6 @@ function dca_tb_media_badge($post_id) {
     $class = $count > 0 ? 'dca-badge-green' : 'dca-badge-muted';
     return '<span class="dca-badge ' . esc_attr($class) . '">' . absint($count) . ' media</span>';
 }
-
 
 function dca_tb_build_summary_block($post_id) {
     $post = get_post($post_id);
@@ -939,9 +929,6 @@ function dca_tb_apply_featured_image_from_textblock($post_id, $textblock) {
 
     set_post_thumbnail($post_id, $attachment_id);
 
-    // Metadata staat normaal ook in het MEDIA-blok. Als dat blok ontbreekt of
-    // deze attachment daar niet in voorkomt, verwerkt het featured-imageblok de
-    // metadata zelf zodat featured images zelfstandig te beheren blijven.
     if (!dca_tb_featured_image_has_media_item($attachment_id, $textblock)) {
         $replace_pairs = [];
         $media_item = [
@@ -1381,7 +1368,6 @@ function dca_tb_collect_media_refs($post_id) {
         }
     }
 
-    // Loop alleen door ACF-velden die ACF op dit object detecteert.
     if (function_exists('get_field_objects')) {
         foreach (dca_tb_get_detected_acf_fields($post_id) as $field) {
             $type = isset($field['type']) ? sanitize_key($field['type']) : '';
@@ -1861,7 +1847,7 @@ function dca_tb_replace_media_urls_on_page($post_id, $replace_pairs) {
             $new_value = dca_tb_recursive_url_replace($value, $replace_pairs, $local_count);
             if ($local_count > 0) {
                 update_post_meta($post_id, $key, $new_value, $value);
-                $count += $local_count;
+                $count += (int) $local_count;
             }
         }
     }
@@ -2030,9 +2016,6 @@ function dca_tb_save_media_items($post_id, $textblock) {
             continue;
         }
 
-        // Media-items in dit blok zijn juist de lokale gekoppelde attachments. Metadata
-        // mag altijd worden bijgewerkt; bestandsnaam wijzigen blijft apart beschermd door
-        // DCA_TB_ALLOW_MEDIA_FILE_RENAME en de extensie/bestandscontroles.
         $updated = dca_tb_update_attachment_from_media_item($id, $item, $replace_pairs, 'media-import', false);
         if (is_wp_error($updated)) {
             $result['media_errors']++;
@@ -2538,9 +2521,6 @@ function dca_tb_build_textblock($post_id) {
         return 'Geen geldig bericht, geldige pagina of geldig product gevonden.';
     }
 
-    /**
-     * Berichten: alleen WordPress titel, content, samenvatting, Yoast SEO en media.
-     */
     if ($post->post_type === 'post') {
         $out = [
             'TITEL',
@@ -2563,9 +2543,6 @@ function dca_tb_build_textblock($post_id) {
         return trim(implode("\n", $out));
     }
 
-    /**
-     * Pagina's en producten: exporteer alleen de ACF-velden die ACF voor dit object detecteert.
-     */
     if (!function_exists('get_field_objects')) {
         return 'ACF is niet actief of get_field_objects() is niet beschikbaar.';
     }
@@ -2726,7 +2703,6 @@ function dca_tb_update_acf_value($field_name, $value, $post_id) {
         $updated = $updated || (bool) $acf_result;
     }
 
-    // Fallback op metakey wanneer ACF een veldnaam niet meer naar een field key kan herleiden.
     $meta_result = update_post_meta($post_id, $field_name, $value);
     $updated = $updated || (bool) $meta_result;
 
@@ -2743,9 +2719,6 @@ function dca_tb_save_to_fields($post_id, $textblock, $source = 'save') {
 
     $textblock = trim(str_replace(["\r\n", "\r"], "\n", (string) $textblock));
 
-    /**
-     * Berichten: opslaan naar post_title, post_content, samenvatting en media.
-     */
     if ($post->post_type === 'post') {
         $validation = dca_tb_validate_post_textblock($textblock);
 
@@ -2802,10 +2775,6 @@ function dca_tb_save_to_fields($post_id, $textblock, $source = 'save') {
         return true;
     }
 
-    /**
-     * Pagina's: dynamische ACF-logica. Alleen velden verwerken die ACF op
-     * deze doelpagina detecteert en die ook in de export staan.
-     */
     if (!function_exists('update_field') || !function_exists('get_field_objects')) {
         return new WP_Error('dca_acf_missing', 'ACF is niet actief of update_field()/get_field_objects() is niet beschikbaar.');
     }
@@ -2857,7 +2826,6 @@ function dca_tb_save_to_fields($post_id, $textblock, $source = 'save') {
     clean_post_cache($post_id);
 
     return true;
-
 }
 
 function dca_tb_build_bulk_export($object_ids, $object_type = 'post', $taxonomy = '') {
@@ -2901,7 +2869,7 @@ function dca_tb_build_bulk_export($object_ids, $object_type = 'post', $taxonomy 
             continue;
         }
 
-        if (dca_tb_template_skip_reason($post_id) !== '') {
+        if ($post->post_type === 'page' && dca_tb_template_skip_reason($post_id) !== '') {
             continue;
         }
 
@@ -2965,7 +2933,6 @@ function dca_tb_url_matches_post($url, $post_id) {
 
     return $source_path === $target_path;
 }
-
 
 function dca_tb_import_label_to_post_type($label) {
     $label = strtoupper(dca_tb_clean_text((string) $label));
@@ -3216,7 +3183,6 @@ function dca_tb_resolve_page_details($page_id, $url, $title, $expected_post_type
 
     $allowed_post_types = $expected_post_type !== '' ? [$expected_post_type] : dca_tb_supported_post_types();
 
-    // Gebruik de geëxporteerde ID alleen wanneer die nog bij hetzelfde item hoort.
     if ($page_id && ($post = get_post($page_id)) && in_array($post->post_type, $allowed_post_types, true)) {
         $url_matches = dca_tb_url_matches_post($url, $page_id);
         $title_matches = dca_tb_title_matches_post($title, $page_id);
@@ -3313,7 +3279,6 @@ function dca_tb_parse_bulk_file($txt) {
 
     $items = [];
 
-    // Accepteer kleine variaties in bestaande TXT-exports zonder het exportformaat te wijzigen.
     $pattern = '/^={10,}[^\S\n]*\n\s*([^:\n]+)\s*:\s*(.*?)\n\s*URL\s*:\s*(.*?)\n\s*ID\s*:\s*(\d+)\s*\n((?:\s*(?:Post type|Object type|Taxonomy)\s*:\s*[a-z0-9_-]+\s*\n)*)={10,}[^\S\n]*(?:\n)+(.*?)(?=^={10,}[^\S\n]*\n\s*[^:\n]+\s*:|\z)/ims';
 
     if (preg_match_all($pattern, $txt, $matches, PREG_SET_ORDER)) {
@@ -3401,7 +3366,7 @@ function dca_tb_bulk_preview($txt) {
                         'target_id'          => $target,
                         'target_post_id'     => $target,
                         'target_object_type' => $object_type,
-            'target_taxonomy'    => $taxonomy,
+                        'target_taxonomy'    => $taxonomy,
                         'target_title'       => dca_tb_resolve_content_item_title($target, $object_type, $taxonomy),
                         'status'             => $status,
                         'message'            => $message,
@@ -3486,7 +3451,7 @@ function dca_tb_bulk_save($txt) {
                 'target_id'          => 0,
                 'target_post_id'     => 0,
                 'target_object_type' => $object_type,
-            'target_taxonomy'    => $taxonomy,
+                'target_taxonomy'    => $taxonomy,
                 'target_title'       => '',
                 'status'             => 'skipped',
                 'message'            => 'Overgeslagen: geen bijpassend ondersteund item gevonden.',
@@ -3503,7 +3468,7 @@ function dca_tb_bulk_save($txt) {
                 'target_id'          => $target,
                 'target_post_id'     => $target,
                 'target_object_type' => $object_type,
-            'target_taxonomy'    => $taxonomy,
+                'target_taxonomy'    => $taxonomy,
                 'target_title'       => dca_tb_resolve_content_item_title($target, $object_type, $taxonomy),
                 'status'             => 'skipped',
                 'message'            => 'Overgeslagen: geen rechten om deze categorie te bewerken.',
@@ -3520,7 +3485,7 @@ function dca_tb_bulk_save($txt) {
                 'target_id'          => $target,
                 'target_post_id'     => $target,
                 'target_object_type' => $object_type,
-            'target_taxonomy'    => $taxonomy,
+                'target_taxonomy'    => $taxonomy,
                 'target_title'       => get_the_title($target),
                 'status'             => 'skipped',
                 'message'            => 'Overgeslagen: geen rechten om dit item te bewerken.',
@@ -3543,7 +3508,7 @@ function dca_tb_bulk_save($txt) {
                     'target_id'          => $target,
                     'target_post_id'     => $target,
                     'target_object_type' => $object_type,
-            'target_taxonomy'    => $taxonomy,
+                    'target_taxonomy'    => $taxonomy,
                     'target_title'       => get_the_title($target),
                     'status'             => 'skipped',
                     'message'            => $template_reason,
@@ -3565,7 +3530,7 @@ function dca_tb_bulk_save($txt) {
                 'target_id'          => $target,
                 'target_post_id'     => $target,
                 'target_object_type' => $object_type,
-            'target_taxonomy'    => $taxonomy,
+                'target_taxonomy'    => $taxonomy,
                 'target_title'       => dca_tb_resolve_content_item_title($target, $object_type, $taxonomy),
                 'status'             => 'skipped',
                 'message'            => 'Overgeslagen: ' . $validation->get_error_message(),
@@ -3590,7 +3555,7 @@ function dca_tb_bulk_save($txt) {
                 'target_id'          => $target,
                 'target_post_id'     => $target,
                 'target_object_type' => $object_type,
-            'target_taxonomy'    => $taxonomy,
+                'target_taxonomy'    => $taxonomy,
                 'target_title'       => dca_tb_resolve_content_item_title($target, $object_type, $taxonomy),
                 'status'             => 'skipped',
                 'message'            => 'Overgeslagen: ' . $save->get_error_message(),
@@ -3916,7 +3881,6 @@ function dca_tb_restore_last_media_backup($attachment_id) {
     return true;
 }
 
-
 function dca_tb_can_edit_post($post_id) {
     $post_id = absint($post_id);
     $post = $post_id ? get_post($post_id) : null;
@@ -3971,14 +3935,6 @@ function dca_tb_post_id_list($key) {
 }
 
 function dca_tb_current_user_can_use_manager() {
-    /**
-     * Filtert de capability die nodig is om Content Sync Manager te gebruiken.
-     *
-     * Standaard is manage_options nodig omdat de plugin bulkgewijs content
-     * en media-metadata kan overschrijven.
-     *
-     * @param string $capability Vereiste capability.
-     */
     $capability = apply_filters('dca_tb_manager_capability', 'manage_options');
 
     return is_string($capability) && $capability !== '' && current_user_can($capability);
@@ -3989,7 +3945,6 @@ function dca_tb_require_manager_access() {
         wp_send_json_error(['message' => 'Geen rechten om de Content Sync Manager te gebruiken.'], 403);
     }
 }
-
 
 function dca_tb_request_has_destructive_confirmation() {
     return hash_equals('1', dca_tb_post_text('destructive_confirm'));
@@ -4205,7 +4160,6 @@ add_action('wp_ajax_dca_txt_import_run', function () {
     ]);
 });
 
-
 add_action('wp_ajax_dca_get_last_import_log', function () {
     dca_tb_require_ajax_access();
 
@@ -4266,7 +4220,6 @@ add_action('wp_ajax_dca_restore_last_media_backup', function () {
 
     wp_send_json_success(['message' => 'Laatste media-backup is hersteld.']);
 });
-
 
 function dca_tb_should_load_admin_ui($hook_suffix = '') {
     if ($hook_suffix !== '' && !in_array($hook_suffix, ['edit.php', 'edit-tags.php'], true)) {
@@ -4384,7 +4337,6 @@ add_action('admin_notices', function () {
     }
 
     $screen = get_current_screen();
-
     $post_type = ($screen && isset($screen->post_type)) ? sanitize_key((string) $screen->post_type) : '';
 
     if (!$screen || $screen->base !== 'edit' || !in_array($post_type, ['page', 'product'], true) || dca_tb_acf_available()) {
