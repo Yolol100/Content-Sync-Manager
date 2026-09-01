@@ -17,7 +17,7 @@ $assert = static function (bool $condition, string $message): void {
 
 wp_set_current_user(1);
 $assert(current_user_can('manage_options'), 'Runtime user must be an administrator.');
-$assert(defined('DCA_TB_VERSION') && DCA_TB_VERSION === '1.2.61', 'Installed plugin version is not 1.2.61.');
+$assert(defined('DCA_TB_VERSION') && DCA_TB_VERSION === '1.2.62', 'Installed plugin version is not 1.2.62.');
 
 foreach ([
     'dca_tb_build_bulk_export',
@@ -25,6 +25,9 @@ foreach ([
     'dca_tb_bulk_save',
     'dca_tb_restore_last_import_page_backups',
     'dca_tb_ai_image_context_build_media_export',
+    'dca_tb_ai_image_context_preview_media_import',
+    'dca_tb_ai_image_context_apply_media_import',
+    'dca_tb_ai_image_context_walk_acf_field',
 ] as $function) {
     $assert(function_exists($function), 'Missing runtime function: ' . $function);
 }
@@ -36,6 +39,8 @@ foreach ([
     'wp_ajax_dca_txt_import_run',
     'wp_ajax_dca_restore_last_import_pages',
     'wp_ajax_dca_ai_image_context_export',
+    'wp_ajax_dca_ai_image_context_import_preview',
+    'wp_ajax_dca_ai_image_context_import_run',
 ] as $hook) {
     $assert(has_action($hook) !== false, 'Missing authenticated AJAX hook: ' . $hook);
 }
@@ -109,11 +114,12 @@ $roundtrip = static function (string $post_type, string $field_key = '', string 
     ];
 };
 
-$media_export = static function () use ($assert): array {
+$media_export_import = static function () use ($assert): array {
     $uploads = wp_upload_dir();
     $assert(empty($uploads['error']), 'WordPress uploads directory is unavailable.');
 
-    $filename = 'content-sync-runtime-media-' . wp_generate_password(8, false, false) . '.png';
+    $token = wp_generate_password(8, false, false);
+    $filename = 'content-sync-runtime-media-' . $token . '.png';
     $path = trailingslashit($uploads['path']) . $filename;
     $png = base64_decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=', true);
     $assert($png !== false && file_put_contents($path, $png) !== false, 'Unable to create runtime image fixture.');
@@ -138,16 +144,93 @@ $media_export = static function () use ($assert): array {
     $export = dca_tb_ai_image_context_build_media_export([$attachment_id]);
     $assert($export !== '', 'Selected Media Library image export returned no text.');
     $assert(strpos($export, 'AI AFBEELDINGSCONTEXT MEDIA-EXPORT') !== false, 'Media export header is missing.');
+    $assert(strpos($export, 'Schema: 3') !== false, 'Media export schema is not current.');
     $assert(strpos($export, 'Attachment ID: ' . $attachment_id) !== false, 'Media export is missing the selected attachment ID.');
     $assert(strpos($export, 'Runtime media title') !== false, 'Media export is missing attachment title metadata.');
     $assert(strpos($export, 'Runtime media alt') !== false, 'Media export is missing attachment alt metadata.');
     $assert(strpos($export, $filename) !== false, 'Media export is missing the selected image filename.');
+    $assert(strpos($export, 'MEDIA IMPORT') !== false && strpos($export, 'EINDE MEDIA IMPORT') !== false, 'Media export is missing the round-trip import block.');
+    $assert(strpos($export, 'AI-preview URL: ') !== false, 'Media export is missing primary preview context.');
+    $assert(strpos($export, 'AI-detailpreview URL: ') !== false, 'Media export is missing detail preview context.');
+
+    $acf_refs = [];
+    dca_tb_ai_image_context_walk_acf_field([
+        'type' => 'gallery',
+        'key' => 'field_runtime_gallery',
+    ], [$attachment_id, $attachment_id], 'acf:gallery', $acf_refs);
+    $assert(isset($acf_refs[$attachment_id]['acf:gallery[1]']), 'Exact ACF gallery position is missing.');
+
+    $repeater_refs = [];
+    dca_tb_ai_image_context_walk_acf_field([
+        'type' => 'repeater',
+        'key' => 'field_runtime_repeater',
+        'sub_fields' => [[
+            'type' => 'image',
+            'key' => 'field_runtime_repeater_image',
+            'name' => 'image',
+        ]],
+    ], [['image' => $attachment_id]], 'acf:items', $repeater_refs);
+    $assert(isset($repeater_refs[$attachment_id]['acf:items[0].image']), 'Exact ACF repeater image path is missing.');
+
+    $flex_refs = [];
+    dca_tb_ai_image_context_walk_acf_field([
+        'type' => 'flexible_content',
+        'key' => 'field_runtime_flex',
+        'layouts' => [[
+            'name' => 'hero',
+            'sub_fields' => [[
+                'type' => 'image',
+                'key' => 'field_runtime_flex_image',
+                'name' => 'image',
+            ]],
+        ]],
+    ], [['acf_fc_layout' => 'hero', 'image' => $attachment_id]], 'acf:flex', $flex_refs);
+    $assert(isset($flex_refs[$attachment_id]['acf:flex[0]{hero}.image']), 'Exact ACF Flexible Content image path is missing.');
+
+    $new_name = 'content-sync-runtime-renamed-' . $token;
+    $import_text = implode("\n", [
+        'MEDIA IMPORT',
+        'Attachment ID:',
+        (string) $attachment_id,
+        'Bestandsnaam:',
+        $filename,
+        'Nieuwe bestandsnaam:',
+        $new_name,
+        'Title:',
+        'Runtime media title changed',
+        'Alt text:',
+        'Runtime media alt changed',
+        'Caption:',
+        'Runtime media caption changed',
+        'Description:',
+        'Runtime media description changed',
+        'EINDE MEDIA IMPORT',
+    ]);
+
+    $preview = dca_tb_ai_image_context_preview_media_import($import_text);
+    $assert(!is_wp_error($preview), 'AI media import preview failed.');
+    $assert((int) ($preview['importable'] ?? 0) === 1, 'AI media import preview is not importable.');
+    $assert((int) ($preview['errors'] ?? 0) === 0, 'AI media import preview reported an unexpected error.');
+    $assert(!empty($preview['items'][0]['rename_allowed']), 'AI media rename should be allowed for an unused attachment in a complete scan.');
+
+    $result = dca_tb_ai_image_context_apply_media_import($import_text);
+    $assert(!is_wp_error($result), 'AI media import failed.');
+    $assert((int) ($result['updated'] ?? 0) === 1, 'AI media import did not update the attachment.');
+    $assert((int) ($result['renamed'] ?? 0) === 1, 'AI media import did not rename the physical filename.');
+    $assert((int) ($result['errors'] ?? 0) === 0, 'AI media import reported an unexpected error.');
+    $assert((string) get_post_meta($attachment_id, '_wp_attachment_image_alt', true) === 'Runtime media alt changed', 'AI media import did not update alt text.');
+    $assert((string) get_post_field('post_title', $attachment_id) === 'Runtime media title changed', 'AI media import did not update media title.');
+    $assert((string) wp_basename(get_attached_file($attachment_id)) === $new_name . '.png', 'AI media import did not rename the attached file as expected.');
+    $assert(is_file(get_attached_file($attachment_id)), 'Renamed media file is missing from uploads.');
 
     wp_delete_attachment($attachment_id, true);
+    dca_tb_ai_image_context_cleanup_preview_files(true);
 
     return [
         'attachment' => $attachment_id,
         'export_bytes' => strlen($export),
+        'import_updated' => (int) $result['updated'],
+        'renamed' => (int) $result['renamed'],
     ];
 };
 
@@ -181,7 +264,7 @@ $evidence = [];
 $evidence[] = $roundtrip('post');
 [$page_field_key, $page_field_name] = $register_field('page');
 $evidence[] = $roundtrip('page', $page_field_key, $page_field_name);
-$media_evidence = $media_export();
+$media_evidence = $media_export_import();
 
 $expect_woocommerce = getenv('DCA_RUNTIME_EXPECT_WOOCOMMERCE') === '1';
 if ($expect_woocommerce) {
@@ -200,7 +283,7 @@ $payload = [
     'woocommerce' => defined('WC_VERSION') ? WC_VERSION : null,
     'plugin' => DCA_TB_VERSION,
     'flows' => $evidence,
-    'media_export' => $media_evidence,
+    'media_export_import' => $media_evidence,
 ];
 
 if (class_exists('WP_CLI')) {

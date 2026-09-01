@@ -17,91 +17,283 @@ document.addEventListener('DOMContentLoaded', function () {
         document.body.appendChild(link);
         link.click();
         link.remove();
-        window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+        window.setTimeout(function () {
+            URL.revokeObjectURL(url);
+        }, 1000);
+    }
+
+    function uniqueIds(ids) {
+        return Array.from(new Set(ids.filter(function (id) {
+            return Number.isInteger(id) && id > 0;
+        })));
+    }
+
+    function mediaGridSelectionIds() {
+        const ids = [];
+        const wpMedia = window.wp && window.wp.media ? window.wp.media : null;
+        const frame = wpMedia && wpMedia.frame ? wpMedia.frame : null;
+
+        if (frame && typeof frame.state === 'function') {
+            try {
+                const state = frame.state();
+                const selection = state && typeof state.get === 'function' ? state.get('selection') : null;
+                if (selection && typeof selection.each === 'function') {
+                    selection.each(function (model) {
+                        const id = parseInt(model && model.id ? model.id : model.get('id'), 10);
+                        if (Number.isInteger(id) && id > 0) {
+                            ids.push(id);
+                        }
+                    });
+                }
+            } catch (error) {
+                // WordPress can replace the media frame while switching modes; DOM selection remains the fallback.
+            }
+        }
+
+        document.querySelectorAll('.attachments .attachment.selected[data-id]').forEach(function (attachment) {
+            const id = parseInt(attachment.getAttribute('data-id'), 10);
+            if (Number.isInteger(id) && id > 0) {
+                ids.push(id);
+            }
+        });
+
+        return uniqueIds(ids);
     }
 
     function selectedIds() {
-        const selector = mediaScreen
-            ? 'input[type="checkbox"][name="media[]"]:checked'
-            : 'input[type="checkbox"][name="post[]"]:checked';
+        if (mediaScreen) {
+            const listIds = Array.from(document.querySelectorAll('input[type="checkbox"][name="media[]"]:checked')).map(function (checkbox) {
+                return parseInt(checkbox.value, 10);
+            });
+            const gridIds = mediaGridSelectionIds();
+            return uniqueIds(listIds.concat(gridIds));
+        }
 
-        return Array.from(document.querySelectorAll(selector))
-            .map((checkbox) => parseInt(checkbox.value, 10))
-            .filter((id) => Number.isInteger(id) && id > 0);
+        return uniqueIds(Array.from(document.querySelectorAll('input[type="checkbox"][name="post[]"]:checked')).map(function (checkbox) {
+            return parseInt(checkbox.value, 10);
+        }));
     }
 
-    function createButton(target) {
-        if (!target || target.querySelector('[data-dca-ai-image-context]')) {
+    async function postAction(action, fields) {
+        const formData = new FormData();
+        formData.append('action', action);
+        formData.append('nonce', nonce);
+        Object.keys(fields || {}).forEach(function (key) {
+            const value = fields[key];
+            if (Array.isArray(value)) {
+                value.forEach(function (item) {
+                    formData.append(key + '[]', String(item));
+                });
+                return;
+            }
+            formData.append(key, String(value));
+        });
+
+        const response = await fetch(ajaxUrl, {
+            method: 'POST',
+            credentials: 'same-origin',
+            body: formData,
+        });
+        const payload = await response.json();
+
+        if (!response.ok || !payload || !payload.success || !payload.data) {
+            const message = payload && payload.data && payload.data.message
+                ? payload.data.message
+                : 'De Content Sync-actie is mislukt.';
+            throw new Error(message);
+        }
+
+        return payload.data;
+    }
+
+    function readTextFile(file) {
+        if (file && typeof file.text === 'function') {
+            return file.text();
+        }
+
+        return new Promise(function (resolve, reject) {
+            const reader = new FileReader();
+            reader.onload = function () {
+                resolve(String(reader.result || ''));
+            };
+            reader.onerror = function () {
+                reject(new Error('Het TXT-bestand kon niet worden gelezen.'));
+            };
+            reader.readAsText(file);
+        });
+    }
+
+    function createControls(target, options) {
+        if (!target || target.querySelector('[data-dca-ai-image-context-controls]')) {
             return null;
         }
 
-        const button = document.createElement('button');
-        button.type = 'button';
-        button.className = 'button';
-        button.dataset.dcaAiImageContext = '1';
-        button.textContent = 'AI afbeeldingen export';
+        const opts = options || {};
+        const wrapper = document.createElement('span');
+        wrapper.dataset.dcaAiImageContextControls = '1';
+        wrapper.className = opts.grid ? 'dca-ai-image-context-controls dca-ai-image-context-controls-grid media-button' : 'dca-ai-image-context-controls';
+
+        const exportButton = document.createElement('button');
+        exportButton.type = 'button';
+        exportButton.className = opts.grid ? 'button media-button' : 'button';
+        exportButton.dataset.dcaAiImageContext = '1';
+        exportButton.textContent = 'AI afbeeldingen export';
+        wrapper.appendChild(exportButton);
 
         const status = document.createElement('span');
         status.className = 'screen-reader-text';
         status.setAttribute('aria-live', 'polite');
+        wrapper.appendChild(status);
 
-        target.appendChild(button);
-        target.appendChild(status);
-
-        button.addEventListener('click', async function () {
+        exportButton.addEventListener('click', async function () {
             const ids = selectedIds();
             if (!ids.length) {
                 window.alert(mediaScreen
-                    ? 'Selecteer eerst minimaal één afbeelding in Media.'
-                    : 'Selecteer eerst minimaal één pagina, bericht of product.');
+                    ? 'Selecteer eerst minimaal een afbeelding. Gebruik in de rasterweergave eerst Bulkselectie.'
+                    : 'Selecteer eerst minimaal een pagina, bericht of product.');
                 return;
             }
 
-            button.disabled = true;
+            exportButton.disabled = true;
             status.textContent = 'AI-afbeeldingscontext wordt gemaakt.';
 
-            const formData = new FormData();
-            formData.append('action', 'dca_ai_image_context_export');
-            formData.append('nonce', nonce);
-            formData.append('scope', mediaScreen ? 'media' : 'content');
-            ids.forEach((id) => formData.append('ids[]', String(id)));
-
             try {
-                const response = await fetch(ajaxUrl, {
-                    method: 'POST',
-                    credentials: 'same-origin',
-                    body: formData,
+                const data = await postAction('dca_ai_image_context_export', {
+                    scope: mediaScreen ? 'media' : 'content',
+                    ids: ids,
                 });
-                const payload = await response.json();
-
-                if (!response.ok || !payload || !payload.success || !payload.data || !payload.data.text) {
-                    const message = payload && payload.data && payload.data.message
-                        ? payload.data.message
-                        : 'AI-afbeeldingscontext exporteren is mislukt.';
-                    throw new Error(message);
+                if (!data.text) {
+                    throw new Error('De export bevat geen tekst.');
                 }
-
-                downloadText(payload.data.text, payload.data.filename);
-                status.textContent = 'AI-afbeeldingscontext is geëxporteerd.';
+                downloadText(data.text, data.filename);
+                status.textContent = 'AI-afbeeldingscontext is geexporteerd.';
             } catch (error) {
                 const message = error instanceof Error ? error.message : 'AI-afbeeldingscontext exporteren is mislukt.';
                 window.alert(message);
                 status.textContent = message;
             } finally {
-                button.disabled = false;
+                exportButton.disabled = false;
             }
         });
 
-        return button;
+        if (mediaScreen) {
+            const importButton = document.createElement('button');
+            importButton.type = 'button';
+            importButton.className = opts.grid ? 'button media-button' : 'button';
+            importButton.dataset.dcaAiImageImport = '1';
+            importButton.textContent = 'AI data importeren';
+
+            const fileInput = document.createElement('input');
+            fileInput.type = 'file';
+            fileInput.accept = '.txt,text/plain';
+            fileInput.hidden = true;
+            fileInput.dataset.dcaAiImageImportFile = '1';
+
+            wrapper.appendChild(importButton);
+            wrapper.appendChild(fileInput);
+
+            importButton.addEventListener('click', function () {
+                fileInput.value = '';
+                fileInput.click();
+            });
+
+            fileInput.addEventListener('change', async function () {
+                const file = fileInput.files && fileInput.files[0] ? fileInput.files[0] : null;
+                if (!file) {
+                    return;
+                }
+
+                importButton.disabled = true;
+                exportButton.disabled = true;
+                status.textContent = 'AI-media-import wordt gecontroleerd.';
+
+                try {
+                    const text = await readTextFile(file);
+                    const preview = await postAction('dca_ai_image_context_import_preview', { text: text });
+                    const importable = parseInt(preview.importable || 0, 10);
+                    const changes = parseInt(preview.changes || 0, 10);
+                    const errors = parseInt(preview.errors || 0, 10);
+                    const renameBlocked = parseInt(preview.rename_blocked || 0, 10);
+
+                    if (!importable) {
+                        throw new Error('Geen geldige media-items gevonden om te importeren. Fouten: ' + errors + '.');
+                    }
+
+                    const confirmed = window.confirm(
+                        'Controle voltooid. Importabele afbeeldingen: ' + importable
+                        + '. Wijzigingen: ' + changes
+                        + '. Fouten: ' + errors
+                        + '. Veilig geblokkeerde hernoemingen: ' + renameBlocked
+                        + '. Doorgaan met importeren?'
+                    );
+
+                    if (!confirmed) {
+                        status.textContent = 'AI-media-import geannuleerd.';
+                        return;
+                    }
+
+                    const result = await postAction('dca_ai_image_context_import_run', {
+                        text: text,
+                        preview_hash: preview.preview_hash,
+                        destructive_confirm: '1',
+                    });
+                    window.alert(result.message || 'AI-media-import is voltooid.');
+                    status.textContent = 'AI-media-import is voltooid.';
+                    window.location.reload();
+                } catch (error) {
+                    const message = error instanceof Error ? error.message : 'AI-media-import is mislukt.';
+                    window.alert(message);
+                    status.textContent = message;
+                } finally {
+                    importButton.disabled = false;
+                    exportButton.disabled = false;
+                }
+            });
+        }
+
+        target.appendChild(wrapper);
+        return wrapper;
+    }
+
+    function ensureMediaControls() {
+        const gridBulkSelect = document.querySelector('#wp-media-grid .media-frame.mode-grid .media-toolbar .select-mode-toggle-button')
+            || document.querySelector('.media-frame.mode-grid .media-toolbar .select-mode-toggle-button')
+            || document.querySelector('.media-frame.mode-grid .media-toolbar .bulk-select');
+        if (gridBulkSelect && gridBulkSelect.parentElement) {
+            const parent = gridBulkSelect.parentElement;
+            if (!parent.querySelector('[data-dca-ai-image-context-controls]')) {
+                const controls = createControls(parent, { grid: true });
+                if (controls) {
+                    gridBulkSelect.insertAdjacentElement('afterend', controls);
+                }
+            }
+            return;
+        }
+
+        const listTarget = document.querySelector('.tablenav.top .actions.bulkactions')
+            || document.querySelector('.tablenav.top .actions');
+        if (listTarget) {
+            createControls(listTarget, { grid: false });
+        }
     }
 
     if (mediaScreen) {
-        const mediaActions = document.querySelector('.tablenav.top .actions.bulkactions')
-            || document.querySelector('.tablenav.top .actions');
-        createButton(mediaActions);
+        ensureMediaControls();
+        let scheduled = false;
+        const observer = new MutationObserver(function () {
+            if (scheduled) {
+                return;
+            }
+            scheduled = true;
+            window.requestAnimationFrame(function () {
+                scheduled = false;
+                ensureMediaControls();
+            });
+        });
+        observer.observe(document.body, { childList: true, subtree: true });
         return;
     }
 
     const toolbar = document.querySelector('.dca-toolbar, .dca-tb-toolbar, [data-dca-toolbar]');
-    createButton(toolbar);
+    createControls(toolbar, { grid: false });
 });

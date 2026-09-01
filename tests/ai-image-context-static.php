@@ -1,6 +1,6 @@
 <?php
 /**
- * Static regression checks for the AI image context export module.
+ * Static regression checks for the AI image context export/import module.
  */
 
 declare(strict_types=1);
@@ -32,23 +32,50 @@ $module = $read('includes/ai-image-context.php');
 $script = $read('assets/ai-image-context.js');
 
 $assert(strpos($bootstrap, "require_once DCA_TB_PLUGIN_DIR . 'includes/ai-image-context.php';") !== false, 'AI image context module is not loaded by the bootstrap.');
-$assert(strpos($module, "wp_ajax_dca_ai_image_context_export") !== false, 'AI image context AJAX route is missing.');
-$assert(strpos($module, "dca_tb_require_ajax_access()") !== false, 'AI image context export must reuse the manager AJAX authorization boundary.');
-$assert(strpos($module, "\$pagenow === 'upload.php'") !== false, 'AI image context assets must load on the Media Library list screen.');
+$assert(strpos($module, "wp_ajax_dca_ai_image_context_export") !== false, 'AI image context export AJAX route is missing.');
+$assert(strpos($module, "wp_ajax_dca_ai_image_context_import_preview") !== false, 'AI image import preview AJAX route is missing.');
+$assert(strpos($module, "wp_ajax_dca_ai_image_context_import_run") !== false, 'AI image import run AJAX route is missing.');
+$assert(strpos($module, "dca_tb_require_ajax_access()") !== false, 'AI image actions must reuse the manager AJAX authorization boundary.');
+$assert(strpos($module, "dca_tb_require_matching_import_preview(\$text)") !== false, 'AI image import must bind execution to the exact previewed TXT.');
+$assert(strpos($module, "dca_tb_require_destructive_confirmation()") !== false, 'AI image import must require an explicit destructive confirmation.');
+$assert(strpos($module, "\$pagenow === 'upload.php'") !== false, 'AI image context assets must load on the Media Library screen.');
 $assert(strpos($module, "wp_localize_script('dca-tb-ai-image-context', 'dcaTbAiImageContextSettings'") !== false, 'Media Library export must receive its own nonce and AJAX settings.');
-$assert(strpos($module, 'dca_tb_ai_image_context_build_media_export') !== false, 'Selected Media Library images need a dedicated export builder.');
-$assert(strpos($module, "wp_get_attachment_image_src") !== false, 'AI image context preview must use WordPress attachment image sizes.');
-$assert(strpos($module, "manual-preview-needed") !== false, 'Oversized images without a safe preview must fail closed to manual preview.');
-$assert(strpos($module, "Gedeeld binnen selectie") !== false, 'Shared attachment signal is missing from page-based export.');
-$assert(strpos($module, "Sitebreed gedeeld: onbekend") !== false, 'Site-wide reuse uncertainty must remain explicit.');
-$assert(strpos($module, "Status op onzeker") !== false, 'Low-confidence AI fallback instruction is missing.');
-$assert(strpos($module, "decoratieve afbeeldingen") !== false, 'Decorative-image alt handling is missing.');
-$assert(strpos($module, "IMPORTBLOK VOOR DEZE PAGINA") !== false, 'Import-ready source block is missing from page-based AI export.');
-$assert(strpos($script, "dca_ai_image_context_export") !== false, 'Client and server AI export actions do not match.');
+$assert(strpos($module, 'DCA_TB_AI_IMAGE_CONTEXT_PREVIEW_MAX') !== false && strpos($module, '512') !== false, 'Primary AI preview limit is missing.');
+$assert(strpos($module, 'DCA_TB_AI_IMAGE_CONTEXT_DETAIL_PREVIEW_MAX') !== false && strpos($module, '1024') !== false, 'Detail AI preview limit is missing.');
+$assert(strpos($module, 'wp_get_image_editor') !== false, 'AI image context must generate a real downsized preview when needed.');
+$assert(strpos($module, 'content-sync-ai-previews') !== false, 'Temporary preview directory is missing.');
+$assert(strpos($module, "wp_schedule_event") !== false && strpos($module, "dca_tb_ai_image_context_cleanup_previews") !== false, 'Temporary preview cleanup schedule is missing.');
+$assert(strpos($module, "manual-preview-needed") !== false, 'Preview generation must fail closed when no safe preview is available.');
+$assert(strpos($module, 'dca_tb_ai_image_context_walk_acf_field') !== false, 'Exact recursive ACF path walker is missing.');
+$assert(strpos($module, "'gallery'") !== false && strpos($module, "'repeater'") !== false && strpos($module, "'flexible_content'") !== false, 'Nested ACF media types are not covered.');
+$assert(strpos($module, "field['layouts']") !== false, 'Flexible Content layout-specific subfields are not handled.');
+$assert(strpos($module, "acf_fc_layout") !== false, 'Flexible Content layout name is missing from exact ACF paths.');
+$assert(strpos($module, 'dca_tb_ai_image_context_site_usage_scan') !== false, 'WordPress-wide media usage scan is missing.');
+$assert(strpos($module, 'DCA_TB_AI_IMAGE_CONTEXT_USAGE_SCAN_MAX_POSTS') !== false, 'Usage scan safety limit is missing.');
+$assert(strpos($module, 'dca_tb_ai_image_context_media_import_block') !== false, 'Round-trip MEDIA IMPORT block is missing.');
+$assert(strpos($module, 'EINDE MEDIA IMPORT') !== false, 'MEDIA IMPORT end marker is missing.');
+$assert(strpos($module, 'dca_tb_ai_image_context_preview_media_import') !== false, 'AI media import preview validator is missing.');
+$assert(strpos($module, 'dca_tb_ai_image_context_apply_media_import') !== false, 'AI media import executor is missing.');
+$assert(strpos($module, 'dca_tb_update_attachment_from_media_item') !== false, 'AI media import must reuse the canonical media update/rename function.');
+$assert(strpos($module, 'dca_tb_replace_media_urls_on_page') !== false, 'Safe URL replacement after a media rename is missing.');
+$assert(strpos($module, 'niet-ondersteund contenttype') !== false, 'Filename rename must fail closed for unsupported usage locations.');
+$assert(strpos($module, 'Status op onzeker') !== false, 'Low-confidence AI fallback instruction is missing.');
+$assert(strpos($module, 'decoratieve afbeeldingen') !== false, 'Decorative-image alt handling is missing.');
+$assert(strpos($module, 'wp_remote_') === false, 'AI image context must not silently send images or metadata to an external service.');
+
+$assert(strpos($script, "dca_ai_image_context_export") !== false, 'Client and server export actions do not match.');
+$assert(strpos($script, "dca_ai_image_context_import_preview") !== false, 'Client media import preview action is missing.');
+$assert(strpos($script, "dca_ai_image_context_import_run") !== false, 'Client media import run action is missing.');
 $assert(strpos($script, 'input[type="checkbox"][name="post[]"]:checked') !== false, 'Page AI export must use the current WordPress post selection.');
-$assert(strpos($script, 'input[type="checkbox"][name="media[]"]:checked') !== false, 'Media AI export must use the current Media Library selection.');
-$assert(strpos($script, "formData.append('scope', mediaScreen ? 'media' : 'content')") !== false, 'Client must tell the server whether the selection comes from Media or content.');
-$assert(strpos($script, ".tablenav.top .actions.bulkactions") !== false, 'Media export button must be placed next to the Media Library bulk actions.');
+$assert(strpos($script, 'input[type="checkbox"][name="media[]"]:checked') !== false, 'Media list AI export must use the current Media Library selection.');
+$assert(strpos($script, '.attachment.selected[data-id]') !== false, 'Media grid AI export must read selected grid attachments.');
+$assert(strpos($script, "state.get('selection')") !== false, 'Media grid AI export must also support the WordPress media selection model.');
+$assert(strpos($script, '.select-mode-toggle-button') !== false, 'Media grid controls must be placed beside the WordPress Bulk Select toggle.');
+$assert(strpos($script, 'MutationObserver') !== false, 'Media grid controls must survive WordPress toolbar re-renders.');
+$assert(strpos($script, 'dca-ai-image-context-controls-grid media-button') !== false, 'Media grid controls must stay visible in WordPress select mode.');
+$assert(strpos($script, 'AI data importeren') !== false, 'Media Library AI import button is missing.');
+$assert(strpos($script, "accept = '.txt,text/plain'") !== false, 'AI media import must accept TXT files only.');
+$assert(strpos($script, "preview_hash") !== false && strpos($script, "destructive_confirm") !== false, 'Client import must submit exact-preview binding and destructive confirmation.');
 $assert(strpos($script, "new Blob([text], { type: 'text/plain;charset=utf-8' })") !== false, 'AI export TXT download implementation is missing.');
 
 if ($failures) {

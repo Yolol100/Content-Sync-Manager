@@ -2,9 +2,9 @@
 Contributors: webactueel
 Tags: admin, acf, import, export
 Requires at least: 6.2
-Tested up to: 6.2
+Tested up to: 7.0
 Requires PHP: 7.4
-Stable tag: 1.2.61
+Stable tag: 1.2.62
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -16,6 +16,8 @@ Deze plugin draait alleen in de WordPress-admin en voert geen externe tracking, 
 
 Deze private plugin voegt een compacte admin bulkeditor toe voor pagina's, berichten, producten en ondersteunde custom post types. De plugin is bedoeld voor gecontroleerde staging-imports en detecteert bestaande ACF-velden per item en werkt met lokale WordPress-afbeeldingen.
 
+Vanaf 1.2.62 kan Media > Bibliotheek geselecteerde afbeeldingen in lijst- en rasterweergave exporteren voor AI-analyse. De export bevat media-metadata, paginacontext, gebruikslocaties, exacte ACF-paden waar beschikbaar en tijdelijke verkleinde previews. Een aangepast MEDIA IMPORT-blok kan via de Media Bibliotheek eerst worden gecontroleerd en daarna veilig worden teruggeschreven. Fysieke bestandsnaamwijzigingen blijven achter de bestaande rename- en back-upchecks en worden extra geblokkeerd wanneer de gebruiksscan onvolledig is.
+
 == Installation ==
 
 1. Zet oude Code Snippets/WPCode-versies uit.
@@ -24,6 +26,14 @@ Deze private plugin voegt een compacte admin bulkeditor toe voor pagina's, beric
 4. Test eerst export, preview en daarna import.
 
 == Changelog ==
+
+= 1.2.62 =
+* AI Media: exportknoppen werken in Media Bibliotheek lijst- en rasterweergave en lezen alleen de geselecteerde afbeeldingen.
+* Preview: tijdelijke 512 px- en 1024 px-previews worden zonder onnodige crop gemaakt, met automatische opschoning en fail-closed fallback.
+* Context: export bevat een WordPress-gebruiksscan en exacte ACF-paden voor gallery, group, repeater en flexible content waar beschikbaar.
+* Round-trip: MEDIA IMPORT-blokken kunnen na AI-bewerking via AI data importeren veilig worden gecontroleerd en teruggeschreven naar bestandsnaam, title, alt, caption en description.
+* Safety: import vereist exact-preview binding en expliciete bevestiging; fysieke hernoemingen worden geblokkeerd bij een onvolledige scan of gebruik in niet-ondersteunde contenttypes.
+* Quality: regressie- en runtimecoverage uitgebreid met AI-media-export/import, fysieke rename en geneste ACF-padcontrole.
 
 = 1.2.61 =
 * Fix: selectie voor TXT-export leest de WordPress post[]/delete_tags[]-vakjes direct en is niet meer afhankelijk van een th.check-column-wrapper.
@@ -203,7 +213,7 @@ Deze private plugin voegt een compacte admin bulkeditor toe voor pagina's, beric
 = 1.0.8 =
 * Extra 10/10-releasecheck uitgevoerd op foutpaden, admin-toegang en WordPress.org/Plugin Check-aandachtspunten.
 * Uitgelichte-afbeelding-sectie wordt nu strikt gevalideerd voordat thumbnail of alt-tekst wordt gewijzigd.
-* Admin-modal markup wordt alleen nog geladen voor gebruikers die de manager mogen gebruiken.
+* Admin-modal markup wordt alleen geladen voor gebruikers die de manager mogen gebruiken.
 
 = 1.0.7 =
 * Diepere release-check uitgevoerd op WordPress.org-richtlijnen, Plugin Check-aandachtspunten, security-boundaries en rollbackgedrag.
