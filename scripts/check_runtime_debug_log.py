@@ -23,15 +23,22 @@ for line in lines:
     is_known_woocommerce_cli_notice = all(
         token in line
         for token in (
-            "PHP Notice: Function _load_textdomain_just_in_time was called",
-            "Translation loading for the <code>woocommerce</code> domain was triggered too early",
-            "This message was added in version 6.7.0",
+            "PHP Notice:",
+            "_load_textdomain_just_in_time",
+            "<code>woocommerce</code>",
+            "triggered too early",
+            "version 6.7.0",
+            "/wp-includes/functions.php on line",
         )
     )
     if is_known_woocommerce_cli_notice:
         allowed.append(line)
     else:
         unexpected.append(line)
+
+if len(allowed) > 1:
+    unexpected.extend(allowed[1:])
+    allowed = allowed[:1]
 
 if unexpected:
     print("Unexpected WordPress runtime debug output:", file=sys.stderr)
