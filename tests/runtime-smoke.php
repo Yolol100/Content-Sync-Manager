@@ -24,6 +24,7 @@ foreach ([
     'dca_tb_bulk_preview',
     'dca_tb_bulk_save',
     'dca_tb_restore_last_import_page_backups',
+    'dca_tb_ai_image_context_build_media_export',
 ] as $function) {
     $assert(function_exists($function), 'Missing runtime function: ' . $function);
 }
@@ -34,6 +35,7 @@ foreach ([
     'wp_ajax_dca_txt_import_preview',
     'wp_ajax_dca_txt_import_run',
     'wp_ajax_dca_restore_last_import_pages',
+    'wp_ajax_dca_ai_image_context_export',
 ] as $hook) {
     $assert(has_action($hook) !== false, 'Missing authenticated AJAX hook: ' . $hook);
 }
@@ -107,6 +109,48 @@ $roundtrip = static function (string $post_type, string $field_key = '', string 
     ];
 };
 
+$media_export = static function () use ($assert): array {
+    $uploads = wp_upload_dir();
+    $assert(empty($uploads['error']), 'WordPress uploads directory is unavailable.');
+
+    $filename = 'content-sync-runtime-media-' . wp_generate_password(8, false, false) . '.png';
+    $path = trailingslashit($uploads['path']) . $filename;
+    $png = base64_decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=', true);
+    $assert($png !== false && file_put_contents($path, $png) !== false, 'Unable to create runtime image fixture.');
+
+    $attachment_id = wp_insert_attachment([
+        'post_mime_type' => 'image/png',
+        'post_title'     => 'Runtime media title',
+        'post_excerpt'   => 'Runtime media caption',
+        'post_content'   => 'Runtime media description',
+        'post_status'    => 'inherit',
+    ], $path, 0, true);
+
+    $assert(!is_wp_error($attachment_id) && $attachment_id > 0, 'Unable to create runtime image attachment.');
+    update_post_meta($attachment_id, '_wp_attachment_image_alt', 'Runtime media alt');
+    wp_update_attachment_metadata($attachment_id, [
+        'width'  => 1,
+        'height' => 1,
+        'file'   => ltrim(str_replace(trailingslashit($uploads['basedir']), '', $path), '/'),
+        'sizes'  => [],
+    ]);
+
+    $export = dca_tb_ai_image_context_build_media_export([$attachment_id]);
+    $assert($export !== '', 'Selected Media Library image export returned no text.');
+    $assert(strpos($export, 'AI AFBEELDINGSCONTEXT MEDIA-EXPORT') !== false, 'Media export header is missing.');
+    $assert(strpos($export, 'Attachment ID: ' . $attachment_id) !== false, 'Media export is missing the selected attachment ID.');
+    $assert(strpos($export, 'Runtime media title') !== false, 'Media export is missing attachment title metadata.');
+    $assert(strpos($export, 'Runtime media alt') !== false, 'Media export is missing attachment alt metadata.');
+    $assert(strpos($export, $filename) !== false, 'Media export is missing the selected image filename.');
+
+    wp_delete_attachment($attachment_id, true);
+
+    return [
+        'attachment' => $attachment_id,
+        'export_bytes' => strlen($export),
+    ];
+};
+
 $assert(function_exists('acf_add_local_field_group'), 'ACF is not active.');
 $acf_version = defined('ACF_VERSION') ? ACF_VERSION : '';
 $assert($acf_version === '6.8.9', 'Unexpected ACF version: ' . $acf_version);
@@ -137,6 +181,7 @@ $evidence = [];
 $evidence[] = $roundtrip('post');
 [$page_field_key, $page_field_name] = $register_field('page');
 $evidence[] = $roundtrip('page', $page_field_key, $page_field_name);
+$media_evidence = $media_export();
 
 $expect_woocommerce = getenv('DCA_RUNTIME_EXPECT_WOOCOMMERCE') === '1';
 if ($expect_woocommerce) {
@@ -155,6 +200,7 @@ $payload = [
     'woocommerce' => defined('WC_VERSION') ? WC_VERSION : null,
     'plugin' => DCA_TB_VERSION,
     'flows' => $evidence,
+    'media_export' => $media_evidence,
 ];
 
 if (class_exists('WP_CLI')) {
