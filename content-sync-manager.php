@@ -38,6 +38,7 @@ add_action('plugins_loaded', static function () {
 });
 
 require_once DCA_TB_PLUGIN_DIR . 'includes/manager.php';
+require_once DCA_TB_PLUGIN_DIR . 'includes/ai-image-context.php';
 
 /*
  * Keep the client-side manager and the server-rendered modals on the same
@@ -48,5 +49,6 @@ require_once DCA_TB_PLUGIN_DIR . 'includes/manager.php';
 add_action('admin_enqueue_scripts', static function () {
     if (function_exists('dca_tb_current_user_can_use_manager') && !dca_tb_current_user_can_use_manager()) {
         remove_action('admin_enqueue_scripts', 'dca_tb_enqueue_admin_assets');
+        remove_action('admin_enqueue_scripts', 'dca_tb_enqueue_ai_image_context_assets', 20);
     }
 }, 0);
