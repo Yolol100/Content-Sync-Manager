@@ -11,12 +11,20 @@ if (!defined('DCA_TB_AI_IMAGE_CONTEXT_MAX_POSTS')) {
     define('DCA_TB_AI_IMAGE_CONTEXT_MAX_POSTS', 50);
 }
 
+if (!defined('DCA_TB_AI_IMAGE_CONTEXT_MAX_MEDIA')) {
+    define('DCA_TB_AI_IMAGE_CONTEXT_MAX_MEDIA', 100);
+}
+
 if (!defined('DCA_TB_AI_IMAGE_CONTEXT_MAX_CONTEXT_CHARS')) {
     define('DCA_TB_AI_IMAGE_CONTEXT_MAX_CONTEXT_CHARS', 5000);
 }
 
 function dca_tb_ai_image_context_screen_is_supported() {
     global $pagenow;
+
+    if ($pagenow === 'upload.php') {
+        return true;
+    }
 
     if ($pagenow !== 'edit.php') {
         return false;
@@ -40,9 +48,16 @@ function dca_tb_enqueue_ai_image_context_assets() {
         'dca-tb-ai-image-context',
         DCA_TB_PLUGIN_URL . 'assets/ai-image-context.js',
         [],
-        DCA_TB_VERSION,
+        DCA_TB_VERSION . '-media-1',
         true
     );
+
+    global $pagenow;
+    wp_localize_script('dca-tb-ai-image-context', 'dcaTbAiImageContextSettings', [
+        'nonce'   => wp_create_nonce('dca_acf_textblock_nonce'),
+        'ajaxUrl' => admin_url('admin-ajax.php'),
+        'screen'  => $pagenow === 'upload.php' ? 'media' : 'content',
+    ]);
 }
 add_action('admin_enqueue_scripts', 'dca_tb_enqueue_ai_image_context_assets', 20);
 
@@ -147,6 +162,42 @@ function dca_tb_ai_image_context_preview($attachment_id) {
     ];
 }
 
+function dca_tb_ai_image_context_media_lines($attachment_id) {
+    $attachment_id = absint($attachment_id);
+    $attachment = get_post($attachment_id);
+
+    if (!$attachment || $attachment->post_type !== 'attachment' || !wp_attachment_is_image($attachment_id)) {
+        return [];
+    }
+
+    $preview = dca_tb_ai_image_context_preview($attachment_id);
+    $metadata = wp_get_attachment_metadata($attachment_id);
+    $width = is_array($metadata) && isset($metadata['width']) ? absint($metadata['width']) : 0;
+    $height = is_array($metadata) && isset($metadata['height']) ? absint($metadata['height']) : 0;
+
+    return [
+        'Huidige URL: ' . esc_url_raw(wp_get_attachment_url($attachment_id)),
+        'Afmetingen origineel: ' . $width . 'x' . $height,
+        'AI-preview status: ' . $preview['status'],
+        'AI-preview URL: ' . $preview['url'],
+        'AI-preview afmetingen: ' . $preview['width'] . 'x' . $preview['height'],
+        'AI-preview bronformaat: ' . $preview['size'],
+        'Huidige bestandsnaam: ' . (function_exists('dca_tb_media_filename') ? dca_tb_media_filename($attachment_id) : ''),
+        'Huidige title: ' . dca_tb_ai_image_context_clean_excerpt($attachment->post_title, 1000),
+        'Huidige alt: ' . dca_tb_ai_image_context_clean_excerpt(get_post_meta($attachment_id, '_wp_attachment_image_alt', true), 1000),
+        'Huidige caption: ' . dca_tb_ai_image_context_clean_excerpt($attachment->post_excerpt, 1500),
+        'Huidige description: ' . dca_tb_ai_image_context_clean_excerpt($attachment->post_content, 2000),
+        'AI status: [invullen: duidelijk/onzeker/decoratief]',
+        'Wat is zichtbaar: [invullen]',
+        'Zekerheid: [invullen: hoog/middel/laag]',
+        'SEO bestandsnaam zonder extensie: [invullen]',
+        'SEO alt: [invullen]',
+        'SEO title: [invullen]',
+        'SEO caption: [invullen indien nuttig]',
+        'SEO description: [invullen indien nuttig]',
+    ];
+}
+
 function dca_tb_ai_image_context_usage_map($post_ids) {
     $usage = [];
 
@@ -176,16 +227,17 @@ function dca_tb_ai_image_context_usage_map($post_ids) {
 function dca_tb_ai_image_context_instruction_block() {
     return implode("\n", [
         'INSTRUCTIE VOOR CHATGPT',
-        'Analyseer per afbeelding eerst metadata, bronveld en paginacontext.',
+        'Analyseer per afbeelding eerst metadata, bronveld en beschikbare paginacontext.',
         'Gebruik de AI-preview alleen wanneer tekst en metadata onvoldoende duidelijk zijn.',
         'De preview-URL is een kleine WordPress-weergave; gebruik niet automatisch het volledige origineel.',
         'Benoem alleen wat visueel betrouwbaar is vastgesteld. Gok niet op personen, locaties, merken of eigenschappen.',
         'Is de afbeelding ook met preview niet duidelijk genoeg, zet Status op onzeker en laat bestaande metadata ongemoeid.',
-        'Combineer wat zichtbaar is met de functie van de afbeelding binnen de pagina.',
+        'Combineer wat zichtbaar is met de functie van de afbeelding binnen de pagina wanneer die context beschikbaar is.',
         'Voor puur decoratieve afbeeldingen mag de geadviseerde alt-tekst leeg zijn.',
         'Bij een gedeelde Attachment ID moet metadata bruikbaar blijven voor alle gemelde pagina’s; maak geen te paginaspecifieke gedeelde metadata.',
         'Maak waar voldoende zeker een SEO-bestandsnaam zonder extensie, alt-tekst, titel, caption en description.',
-        'Geef daarna per pagina een importklaar Content Sync Manager TXT-blok terug. Wijzig daarin alleen Nieuwe bestandsnaam, Title, Alt text, Caption en Description onder MEDIA. Verwijder de AI-contextregels uit het importbestand.',
+        'Bij een Media Library-selectie is de upload-parent alleen extra context en geen bewijs van de actuele gebruikslocatie.',
+        'Geef voor pagina-export daarna per pagina een importklaar Content Sync Manager TXT-blok terug. Wijzig daarin alleen Nieuwe bestandsnaam, Title, Alt text, Caption en Description onder MEDIA. Verwijder de AI-contextregels uit het importbestand.',
     ]);
 }
 
@@ -195,7 +247,7 @@ function dca_tb_ai_image_context_build_export($post_ids) {
     $usage = dca_tb_ai_image_context_usage_map($post_ids);
     $sections = [
         'AI AFBEELDINGSCONTEXT EXPORT',
-        'Schema: 1',
+        'Schema: 2',
         'Gegenereerd: ' . current_time('mysql'),
         '',
         dca_tb_ai_image_context_instruction_block(),
@@ -229,20 +281,15 @@ function dca_tb_ai_image_context_build_export($post_ids) {
         $index = 1;
         foreach ($refs as $attachment_id => $ref) {
             $attachment_id = absint($attachment_id);
-            $attachment = get_post($attachment_id);
-            if (!$attachment || $attachment->post_type !== 'attachment' || !wp_attachment_is_image($attachment_id)) {
+            $media_lines = dca_tb_ai_image_context_media_lines($attachment_id);
+            if (!$media_lines) {
                 continue;
             }
 
-            $preview = dca_tb_ai_image_context_preview($attachment_id);
             $sources = !empty($ref['sources']) && is_array($ref['sources'])
                 ? implode(', ', array_map('dca_tb_clean_text', $ref['sources']))
                 : '';
             $used_by = isset($usage[$attachment_id]) ? array_map('absint', array_keys($usage[$attachment_id])) : [];
-
-            $metadata = wp_get_attachment_metadata($attachment_id);
-            $width = is_array($metadata) && isset($metadata['width']) ? absint($metadata['width']) : 0;
-            $height = is_array($metadata) && isset($metadata['height']) ? absint($metadata['height']) : 0;
 
             $sections[] = '';
             $sections[] = 'AFBEELDINGSCONTEXT ' . $index;
@@ -251,25 +298,7 @@ function dca_tb_ai_image_context_build_export($post_ids) {
             $sections[] = 'Gebruikt in geselecteerde Post IDs: ' . implode(', ', $used_by);
             $sections[] = 'Gedeeld binnen selectie: ' . (count($used_by) > 1 ? 'ja' : 'nee');
             $sections[] = 'Sitebreed gedeeld: onbekend; controleer vóór paginaspecifieke metadata als dezelfde attachment elders wordt hergebruikt.';
-            $sections[] = 'Huidige URL: ' . esc_url_raw(wp_get_attachment_url($attachment_id));
-            $sections[] = 'Afmetingen origineel: ' . $width . 'x' . $height;
-            $sections[] = 'AI-preview status: ' . $preview['status'];
-            $sections[] = 'AI-preview URL: ' . $preview['url'];
-            $sections[] = 'AI-preview afmetingen: ' . $preview['width'] . 'x' . $preview['height'];
-            $sections[] = 'AI-preview bronformaat: ' . $preview['size'];
-            $sections[] = 'Huidige bestandsnaam: ' . (function_exists('dca_tb_media_filename') ? dca_tb_media_filename($attachment_id) : '');
-            $sections[] = 'Huidige title: ' . dca_tb_ai_image_context_clean_excerpt($attachment->post_title, 1000);
-            $sections[] = 'Huidige alt: ' . dca_tb_ai_image_context_clean_excerpt(get_post_meta($attachment_id, '_wp_attachment_image_alt', true), 1000);
-            $sections[] = 'Huidige caption: ' . dca_tb_ai_image_context_clean_excerpt($attachment->post_excerpt, 1500);
-            $sections[] = 'Huidige description: ' . dca_tb_ai_image_context_clean_excerpt($attachment->post_content, 2000);
-            $sections[] = 'AI status: [invullen: duidelijk/onzeker/decoratief]';
-            $sections[] = 'Wat is zichtbaar: [invullen]';
-            $sections[] = 'Zekerheid: [invullen: hoog/middel/laag]';
-            $sections[] = 'SEO bestandsnaam zonder extensie: [invullen]';
-            $sections[] = 'SEO alt: [invullen]';
-            $sections[] = 'SEO title: [invullen]';
-            $sections[] = 'SEO caption: [invullen indien nuttig]';
-            $sections[] = 'SEO description: [invullen indien nuttig]';
+            array_push($sections, ...$media_lines);
             $index++;
         }
 
@@ -284,6 +313,46 @@ function dca_tb_ai_image_context_build_export($post_ids) {
     return trim(implode("\n", $sections));
 }
 
+function dca_tb_ai_image_context_build_media_export($attachment_ids) {
+    $attachment_ids = array_values(array_unique(array_filter(array_map('absint', (array) $attachment_ids))));
+    $attachment_ids = array_slice($attachment_ids, 0, DCA_TB_AI_IMAGE_CONTEXT_MAX_MEDIA);
+    $sections = [
+        'AI AFBEELDINGSCONTEXT MEDIA-EXPORT',
+        'Schema: 2',
+        'Gegenereerd: ' . current_time('mysql'),
+        '',
+        dca_tb_ai_image_context_instruction_block(),
+    ];
+    $exported = 0;
+
+    foreach ($attachment_ids as $attachment_id) {
+        $attachment = get_post($attachment_id);
+        $media_lines = dca_tb_ai_image_context_media_lines($attachment_id);
+
+        if (!$attachment || !$media_lines || !current_user_can('edit_post', $attachment_id)) {
+            continue;
+        }
+
+        $parent_id = absint($attachment->post_parent);
+        $parent = $parent_id ? get_post($parent_id) : null;
+
+        $sections[] = '';
+        $sections[] = '============================================================';
+        $sections[] = 'MEDIA ITEM ' . ($exported + 1);
+        $sections[] = 'Attachment ID: ' . $attachment_id;
+        $sections[] = 'Bron: geselecteerd in WordPress Media Library';
+        $sections[] = 'Sitebreed gedeeld: onbekend; controleer vóór paginaspecifieke metadata als dezelfde attachment elders wordt hergebruikt.';
+        $sections[] = 'Upload-parent Post ID: ' . ($parent ? $parent_id : '');
+        $sections[] = 'Upload-parent titel: ' . ($parent ? dca_tb_ai_image_context_clean_excerpt(get_the_title($parent_id), 500) : '');
+        $sections[] = 'Upload-parent URL: ' . ($parent ? esc_url_raw(get_permalink($parent_id)) : '');
+        $sections[] = 'Upload-parent context: ' . ($parent ? dca_tb_ai_image_context_page_text($parent_id) : '');
+        array_push($sections, ...$media_lines);
+        $exported++;
+    }
+
+    return $exported > 0 ? trim(implode("\n", $sections)) : '';
+}
+
 function dca_tb_ajax_ai_image_context_export() {
     if (!function_exists('dca_tb_require_ajax_access')) {
         wp_send_json_error(['message' => 'Content Sync Manager is niet volledig geladen.'], 500);
@@ -291,12 +360,34 @@ function dca_tb_ajax_ai_image_context_export() {
 
     dca_tb_require_ajax_access();
 
+    $scope = isset($_POST['scope']) ? sanitize_key(wp_unslash($_POST['scope'])) : 'content';
     $raw_ids = isset($_POST['ids']) ? wp_unslash($_POST['ids']) : [];
     if (!is_array($raw_ids)) {
         wp_send_json_error(['message' => 'Ongeldige selectie.'], 400);
     }
 
     $ids = array_values(array_unique(array_filter(array_map('absint', $raw_ids))));
+
+    if ($scope === 'media') {
+        if (!$ids) {
+            wp_send_json_error(['message' => 'Selecteer minimaal één afbeelding in Media.'], 400);
+        }
+
+        if (count($ids) > DCA_TB_AI_IMAGE_CONTEXT_MAX_MEDIA) {
+            wp_send_json_error(['message' => 'Selecteer maximaal ' . DCA_TB_AI_IMAGE_CONTEXT_MAX_MEDIA . ' afbeeldingen per AI-context-export.'], 400);
+        }
+
+        $text = dca_tb_ai_image_context_build_media_export($ids);
+        if ($text === '') {
+            wp_send_json_error(['message' => 'De selectie bevat geen exporteerbare lokale WordPress-afbeeldingen.'], 422);
+        }
+
+        wp_send_json_success([
+            'text'     => $text,
+            'filename' => 'content-sync-ai-media-' . current_time('Y-m-d-His') . '.txt',
+        ]);
+    }
+
     if (!$ids) {
         wp_send_json_error(['message' => 'Selecteer minimaal één pagina, bericht of product.'], 400);
     }
