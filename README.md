@@ -30,6 +30,8 @@ Admin-only mini-plugin voor TXT export/import van berichten, pagina’s, product
 
 De releasegate test zowel WordPress 6.2.11/PHP 7.4/ACF 6.8.9 als de gezamenlijk ondersteunde ecosystemcombinatie WordPress 7.0.4/PHP 8.3/ACF 6.8.9/WooCommerce 11.0.1. In beide omgevingen wordt de gebouwde ZIP schoon geïnstalleerd en geforceerd bijgewerkt. Daarna worden export, preview, import, importlog en herstel op echte WordPress-content uitgevoerd; de ecosystemmatrix test daarnaast een WooCommerce-product.
 
+Bekende testbeperking: WooCommerce 11.0.1 schrijft tijdens de WP-CLI-runtime één `_load_textdomain_just_in_time`-notice voor zijn eigen `woocommerce`-tekstdomein. De gate staat alleen die exact herkenbare upstreammelding toe en faalt bij iedere andere notice, warning, fatal of debugregel. De Content Sync-flows zelf moeten zonder eigen debugmelding slagen.
+
 Wanneer ACF niet actief of niet volledig beschikbaar is, toont de plugin in de pagina-/productlijst een admin-waarschuwing. Imports met ACF-velden worden dan server-side geblokkeerd; berichtimports zonder ACF blijven bruikbaar.
 
 ## Configuratie

@@ -129,13 +129,9 @@ jobs:
           --path=runtime-site
           --user=1
 
-      - name: Reject WordPress debug errors
+      - name: Reject unexpected WordPress debug errors
         if: always()
         shell: bash
         run: |
           set -euo pipefail
-          log=runtime-site/wp-content/debug.log
-          if [[ -s "$log" ]]; then
-            cat "$log"
-            exit 1
-          fi
+          python scripts/check_runtime_debug_log.py runtime-site/wp-content/debug.log

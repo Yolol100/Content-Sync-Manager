@@ -38,6 +38,7 @@ $runtimeWorkflow = $read('.github/workflows/runtime-release-gate.yml');
 $releaseWorkflow = $read('.github/workflows/release.yml');
 $gitignore = $read('.gitignore');
 $read('tests/runtime-smoke.php');
+$debugLogCheck = $read('scripts/check_runtime_debug_log.py');
 $read('assets/admin.css');
 $read('uninstall.php');
 
@@ -89,6 +90,8 @@ $assert(strpos($runtimeWorkflow, 'permissions:') !== false && strpos($runtimeWor
 $assert(strpos($runtimeWorkflow, 'timeout-minutes: 20') !== false, 'Runtime job must have a bounded timeout.');
 $assert(strpos($runtimeWorkflow, 'ce34ddd838f7351d6759068d09793f26755463b4a4610a5a5c0a97b68220d85c') !== false, 'WP-CLI download must retain its verified SHA-256.');
 $assert(strpos($runtimeWorkflow, 'WordPress 6.2.11') !== false && strpos($runtimeWorkflow, 'WordPress 7.0.4') !== false, 'Runtime workflow must cover the minimum and supported ecosystem WordPress matrices.');
+$assert(strpos($runtimeWorkflow, 'scripts/check_runtime_debug_log.py') !== false, 'Runtime workflow must reject unexpected WordPress debug output.');
+$assert(strpos($debugLogCheck, 'woocommerce</code> domain was triggered too early') !== false, 'Debug-log allowlist must remain limited to the documented WooCommerce CLI notice.');
 $assert(strpos($releaseWorkflow, 'needs: runtime-gate') !== false, 'Draft releases must wait for the clean runtime gate.');
 $assert(preg_match('/^\/dist\/$/m', $gitignore) === 1, 'Generated release artifacts must remain ignored under dist/.');
 
