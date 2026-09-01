@@ -55,6 +55,20 @@ Zet oude Code Snippets/WPCode-versies of oude pluginvarianten eerst uit voordat 
 
 1.2.61
 
+## Releaseproces
+
+1. Voer de quality gate uit en test de plugin-ZIP op een schone staginginstallatie met een back-up.
+2. Controleer dat de versie in de pluginheader, `DCA_TB_VERSION` en de `Stable tag` gelijk is.
+3. Maak pas daarna de bijpassende tag, bijvoorbeeld `v1.2.61`.
+4. De tagworkflow bouwt de ZIP tweemaal, vergelijkt de SHA-256-checksums en maakt een **conceptrelease** met ZIP en checksum.
+5. Publiceer het concept pas nadat export, preview, import en herstel in de ondersteunde WordPress/PHP-matrix zijn gecontroleerd.
+
+Lokaal kan hetzelfde runtimepakket met Python 3 worden gebouwd:
+
+```shell
+python scripts/build_release.py
+```
+
 ## Changelog
 
 ### 1.2.61

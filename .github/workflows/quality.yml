@@ -52,3 +52,15 @@ jobs:
           test -f includes/manager.php
           test -f assets/admin.js
           test -f assets/admin.css
+
+      - name: Reproducible release package
+        if: matrix.php == '8.3'
+        shell: bash
+        run: |
+          set -euo pipefail
+          python scripts/build_release.py
+          first_checksum="$(cut -d ' ' -f 1 dist/*.sha256)"
+          python scripts/build_release.py
+          second_checksum="$(cut -d ' ' -f 1 dist/*.sha256)"
+          test "$first_checksum" = "$second_checksum"
+          php tests/static-audit.php
