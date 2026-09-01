@@ -63,3 +63,4 @@ jobs:
           python scripts/build_release.py
           second_checksum="$(cut -d ' ' -f 1 dist/*.sha256)"
           test "$first_checksum" = "$second_checksum"
+          php tests/static-audit.php

@@ -34,6 +34,7 @@ $adminJs = $read('assets/admin.js');
 $readme = $read('readme.txt');
 $readmeMd = $read('README.md');
 $workflow = $read('.github/workflows/quality.yml');
+$gitignore = $read('.gitignore');
 $read('assets/admin.css');
 $read('uninstall.php');
 
@@ -79,6 +80,7 @@ $assert(preg_match('/uses:\s*shivammathur\/setup-php@[0-9a-f]{40}/', $workflow) 
 $assert(strpos($workflow, 'persist-credentials: false') !== false, 'Checkout credentials must not persist in the quality job.');
 $assert(strpos($workflow, 'permissions:') !== false && strpos($workflow, 'contents: read') !== false, 'Quality workflow must keep read-only repository permissions.');
 $assert(strpos($workflow, 'timeout-minutes: 10') !== false, 'Quality job must have a bounded timeout.');
+$assert(preg_match('/^\/dist\/$/m', $gitignore) === 1, 'Generated release artifacts must remain ignored under dist/.');
 
 $forbiddenPatterns = [
     '/(^|\/)\.env($|\.)/',
@@ -95,7 +97,7 @@ foreach ($iterator as $file) {
         continue;
     }
     $relative = str_replace('\\', '/', substr($file->getPathname(), strlen($root) + 1));
-    if (strpos($relative, '.git/') === 0) {
+    if (strpos($relative, '.git/') === 0 || strpos($relative, 'dist/') === 0) {
         continue;
     }
     foreach ($forbiddenPatterns as $pattern) {
