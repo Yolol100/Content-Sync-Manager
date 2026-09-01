@@ -9,7 +9,13 @@ permissions:
   contents: read
 
 jobs:
+  runtime-gate:
+    uses: ./.github/workflows/runtime-release-gate.yml
+    permissions:
+      contents: read
+
   verify-and-package:
+    needs: runtime-gate
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     permissions:
