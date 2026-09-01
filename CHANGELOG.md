@@ -1,5 +1,13 @@
 # Content Sync Manager changelog
 
+### 1.2.62
+- AI Media: exportknoppen werken in Media Bibliotheek lijst- en rasterweergave en lezen alleen de geselecteerde afbeeldingen.
+- Preview: tijdelijke 512 px- en 1024 px-previews worden zonder onnodige crop gemaakt, met automatische opschoning en fail-closed fallback.
+- Context: export bevat een WordPress-gebruiksscan en exacte ACF-paden voor gallery, group, repeater en flexible content waar beschikbaar.
+- Round-trip: `MEDIA IMPORT`-blokken kunnen na AI-bewerking via `AI data importeren` veilig worden gecontroleerd en teruggeschreven naar bestandsnaam, title, alt, caption en description.
+- Safety: import vereist exact-preview binding en expliciete bevestiging; fysieke hernoemingen worden geblokkeerd bij een onvolledige scan of gebruik in niet-ondersteunde contenttypes.
+- Quality: regressie- en runtimecoverage uitgebreid met AI-media-export/import, fysieke rename en geneste ACF-padcontrole.
+
 ### 1.2.61
 - Fix: selectie voor TXT-export leest de WordPress `post[]`/`delete_tags[]`-vakjes direct en is niet meer afhankelijk van een `th.check-column`-wrapper.
 - Cache: pluginversie verhoogd zodat de aangepaste admin-JavaScript direct met een nieuwe assetversie wordt geladen.
@@ -17,7 +25,7 @@
 
 ### 1.2.58
 - Packagingfix: hoofdpluginbestand hersteld met geldige WordPress-pluginheader, bootstrapconstants en include naar `includes/manager.php`.
-- Veiligheidsfix: laden wordt geblokkeerd met adminmelding wanneer een oude snippet/pluginversie dezelfde globale functies al actief heeft.
+- Veiligheidsfix: laden wordt geblokkeerd met adminmelding wanneer een oude snippet of pluginversie met dezelfde functies al actief is.
 
 ### 1.2.57
 - Yoast metabeschrijving voor categorieën/productcategorieën schoon opgeslagen via termmeta én Yoast taxonomy-meta fallback.
