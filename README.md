@@ -57,4 +57,10 @@ Zet oude Code Snippets/WPCode-versies of oude pluginvarianten eerst uit voordat 
 
 ## Changelog
 
+### 1.2.61
+
+- Fix: selectie voor TXT-export leest de WordPress `post[]`/`delete_tags[]`-vakjes direct en is niet meer afhankelijk van een `th.check-column`-wrapper.
+- Cache: pluginversie verhoogd zodat de aangepaste admin-JavaScript direct met een nieuwe assetversie wordt geladen.
+- Quality: regressiecheck aangescherpt voor robuuste selectie van berichten, producten, pagina's en termen.
+
 Zie [CHANGELOG.md](CHANGELOG.md) voor de volledige versiehistorie.
