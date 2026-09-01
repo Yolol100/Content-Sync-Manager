@@ -10,16 +10,25 @@ Admin-only mini-plugin voor TXT export/import van berichten, pagina’s, product
 
 1. Upload de pluginmap of ZIP via WordPress.
 2. Activeer de plugin bij voorkeur eerst op staging.
-3. Open Pagina's, Berichten, Producten of een ondersteund custom post type in de admin.
-4. Gebruik de Content Sync-toolbar onderaan het overzicht.
+3. Open Pagina's, Berichten, Producten, een ondersteund custom post type of Media > Bibliotheek in de admin.
+4. Gebruik de Content Sync-toolbar of de AI-afbeeldingsknoppen in de Media Bibliotheek.
+
+## AI-afbeeldingscontext
+
+In Media > Bibliotheek werkt `AI afbeeldingen export` in zowel lijst- als rasterweergave. De export bevat per geselecteerde afbeelding de bestaande media-metadata, WordPress-gebruikslocaties, paginacontext, exacte ACF-paden voor image/gallery/group/repeater/flexible-content waar die beschikbaar zijn, plus tijdelijke niet-gecropte previews van maximaal 512 px en 1024 px.
+
+De tijdelijke previews worden in een aparte uploads-submap gemaakt en automatisch opgeschoond. Er worden geen externe AI- of trackingcalls vanuit de plugin gedaan.
+
+ChatGPT kan in de export alleen de velden onder `MEDIA IMPORT` aanpassen. Daarna kan hetzelfde TXT-bestand via `AI data importeren` worden gecontroleerd en teruggeschreven. De import vereist dezelfde nonce/capabilitygrens als Content Sync, een preview-hash van exact dezelfde TXT-inhoud en een expliciete bevestiging. Bestandsnaamwijzigingen hergebruiken de bestaande veilige media-renamefunctie. Als de WordPress-gebruiksscan onvolledig is of de afbeelding in een niet-ondersteund contenttype wordt gebruikt, wordt alleen de fysieke hernoeming geblokkeerd; veilige metadatawijzigingen kunnen wel doorgaan.
 
 ## Veilig gebruik
 
 - Test eerst op staging.
 - Maak vooraf een database- en uploads-back-up.
-- Gebruik altijd eerst `Controleer bestand` voordat je importeert.
+- Gebruik altijd eerst `Controleer bestand` voordat je de normale Content Sync-import uitvoert.
+- De AI-media-import voert zelf eerst een server-side controle uit en bindt de uitvoering aan exact dezelfde TXT-inhoud.
 - Een import-run wordt server-side geblokkeerd wanneer de TXT-inhoud niet exact overeenkomt met de laatst gecontroleerde preview van dezelfde gebruiker.
-- Media hernoemen staat standaard aan via `DCA_TB_ALLOW_MEDIA_FILE_RENAME`; dit is bewust niet aangepast in versie 1.2.37.
+- Media hernoemen staat standaard aan via `DCA_TB_ALLOW_MEDIA_FILE_RENAME` en blijft achter de bestaande veiligheidschecks voor extensie, MIME-type, uploads-pad, doelbestand en back-up.
 
 ## Vereisten
 
@@ -28,29 +37,34 @@ Admin-only mini-plugin voor TXT export/import van berichten, pagina’s, product
 - ACF 6.8.9 voor pagina-, product- en custom-post-typevelden wanneer die via ACF worden beheerd
 - Voor WooCommerce-producten: WordPress 6.9+ en WooCommerce 11.0.1
 
-De releasegate test zowel WordPress 6.2.11/PHP 7.4/ACF 6.8.9 als de gezamenlijk ondersteunde ecosystemcombinatie WordPress 7.0.4/PHP 8.3/ACF 6.8.9/WooCommerce 11.0.1. In beide omgevingen wordt de gebouwde ZIP schoon geïnstalleerd en geforceerd bijgewerkt. Daarna worden export, preview, import, importlog en herstel op echte WordPress-content uitgevoerd; de ecosystemmatrix test daarnaast een WooCommerce-product.
+De releasegate test zowel WordPress 6.2.11/PHP 7.4/ACF 6.8.9 als de gezamenlijk ondersteunde ecosystemcombinatie WordPress 7.0.4/PHP 8.3/ACF 6.8.9/WooCommerce 11.0.1. In beide omgevingen wordt de gebouwde ZIP schoon geïnstalleerd en geforceerd bijgewerkt. Daarna worden export, preview, import, importlog en herstel op echte WordPress-content uitgevoerd; de ecosystemmatrix test daarnaast een WooCommerce-product en de AI-media-export/import met fysieke bestandsnaamwijziging.
 
 Bekende testbeperking: WooCommerce 11.0.1 schrijft tijdens de WP-CLI-runtime één `_load_textdomain_just_in_time`-notice voor zijn eigen `woocommerce`-tekstdomein. De gate staat alleen die exact herkenbare upstreammelding toe en faalt bij iedere andere notice, warning, fatal of debugregel. De Content Sync-flows zelf moeten zonder eigen debugmelding slagen.
 
-Wanneer ACF niet actief of niet volledig beschikbaar is, toont de plugin in de pagina-/productlijst een admin-waarschuwing. Imports met ACF-velden worden dan server-side geblokkeerd; berichtimports zonder ACF blijven bruikbaar.
+Wanneer ACF niet actief of niet volledig beschikbaar is, toont de plugin in de pagina-/productlijst een admin-waarschuwing. Imports met ACF-velden worden dan server-side geblokkeerd; berichtimports zonder ACF blijven bruikbaar. De Media Bibliotheek-export blijft bruikbaar voor normale WordPress-afbeeldingen, maar exacte ACF-paden zijn dan niet beschikbaar.
 
 ## Configuratie
 
 Deze constants kunnen vóór het laden van de plugin worden gezet:
 
 ```php
-define('DCA_TB_ALLOW_MEDIA_FILE_RENAME', true); // standaard aan; bewust ongewijzigd
+define('DCA_TB_ALLOW_MEDIA_FILE_RENAME', true); // standaard aan
 define('DCA_TB_MAX_IMPORT_PAGES', 50);
 define('DCA_TB_MAX_IMPORT_BYTES', 5242880);
 define('DCA_TB_IMPORT_PREVIEW_TTL', 20 * MINUTE_IN_SECONDS);
 define('DCA_TB_OVERWRITE_EXISTING_MEDIA', false);
 define('DCA_TB_OVERWRITE_EXISTING_TEXT', true);
 define('DCA_TB_OVERWRITE_EXISTING_TITLE', false);
+define('DCA_TB_AI_IMAGE_CONTEXT_PREVIEW_MAX', 512);
+define('DCA_TB_AI_IMAGE_CONTEXT_DETAIL_PREVIEW_MAX', 1024);
+define('DCA_TB_AI_IMAGE_CONTEXT_USAGE_SCAN_MAX_POSTS', 2000);
 ```
 
 ## ACF-velden
 
 Pagina-, product- en custom-post-type-export gebruikt dynamische ACF-detectie. De plugin exporteert alleen velden die ACF op het betreffende item detecteert en importeert alleen velden die op het doelitem ook door ACF bestaan. Oude vaste ACF-layouts zoals hoofdtekst/titel_1/usp_1 worden niet meer teruggeschreven.
+
+Voor AI-afbeeldingscontext wordt aanvullend de raw ACF-structuur doorlopen zodat een afbeelding bijvoorbeeld als `acf:gallery[1]`, `acf:items[0].image` of `acf:flex[0]{hero}.image` kan worden gekoppeld. Deze paden zijn context voor analyse; de bestaande ACF-importcontracten worden er niet door vervangen.
 
 ## Let op bij oude snippets/plugins
 
@@ -58,15 +72,15 @@ Zet oude Code Snippets/WPCode-versies of oude pluginvarianten eerst uit voordat 
 
 ## Versie
 
-1.2.61
+1.2.62
 
 ## Releaseproces
 
 1. Laat de quality gate en de geautomatiseerde schone WordPress-runtimegate slagen en test de plugin-ZIP daarna nog op een representatieve staginginstallatie met een back-up.
 2. Controleer dat de versie in de pluginheader, `DCA_TB_VERSION` en de `Stable tag` gelijk is.
-3. Maak pas daarna de bijpassende tag, bijvoorbeeld `v1.2.61`.
+3. Maak pas daarna de bijpassende tag, bijvoorbeeld `v1.2.62`.
 4. De tagworkflow bouwt de ZIP tweemaal, vergelijkt de SHA-256-checksums en maakt een **conceptrelease** met ZIP en checksum.
-5. Publiceer het concept pas nadat export, preview, import en herstel in de ondersteunde WordPress/PHP-matrix zijn gecontroleerd.
+5. Publiceer het concept pas nadat export, preview, import en herstel in de ondersteunde WordPress/PHP-matrix zijn gecontroleerd en de Media Bibliotheek-UI op staging handmatig is bekeken.
 
 Lokaal kan hetzelfde runtimepakket met Python 3 worden gebouwd:
 
@@ -76,10 +90,13 @@ python scripts/build_release.py
 
 ## Changelog
 
-### 1.2.61
+### 1.2.62
 
-- Fix: selectie voor TXT-export leest de WordPress `post[]`/`delete_tags[]`-vakjes direct en is niet meer afhankelijk van een `th.check-column`-wrapper.
-- Cache: pluginversie verhoogd zodat de aangepaste admin-JavaScript direct met een nieuwe assetversie wordt geladen.
-- Quality: regressiecheck aangescherpt voor robuuste selectie van berichten, producten, pagina's en termen.
+- AI Media: exportknoppen werken in Media Bibliotheek lijst- en rasterweergave en lezen alleen de geselecteerde afbeeldingen.
+- Preview: tijdelijke 512 px- en 1024 px-previews worden zonder onnodige crop gemaakt, met automatische opschoning en fail-closed fallback.
+- Context: export bevat een WordPress-gebruiksscan en exacte ACF-paden voor gallery, group, repeater en flexible content waar beschikbaar.
+- Round-trip: `MEDIA IMPORT`-blokken kunnen na AI-bewerking via `AI data importeren` veilig worden gecontroleerd en teruggeschreven naar bestandsnaam, title, alt, caption en description.
+- Safety: import vereist exact-preview binding en bevestiging; risicovolle fysieke hernoemingen worden geblokkeerd bij een onvolledige scan of gebruik in niet-ondersteunde contenttypes.
+- Quality: regressie- en runtimecoverage uitgebreid met AI-media-export/import, fysieke rename en geneste ACF-padcontrole.
 
 Zie [CHANGELOG.md](CHANGELOG.md) voor de volledige versiehistorie.
