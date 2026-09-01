@@ -38,8 +38,8 @@ jobs:
             wordpress: 6.2.11
             php: '7.4'
             woocommerce: ''
-          - label: WordPress 7.1 - PHP 8.3 - ACF 6.8.9 - WooCommerce 11.0.1
-            wordpress: '7.1'
+          - label: WordPress 7.0.4 - PHP 8.3 - ACF 6.8.9 - WooCommerce 11.0.1
+            wordpress: 7.0.4
             php: '8.3'
             woocommerce: 11.0.1
 

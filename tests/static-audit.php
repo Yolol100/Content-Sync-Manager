@@ -88,7 +88,7 @@ $assert(preg_match('/uses:\s*shivammathur\/setup-php@[0-9a-f]{40}/', $runtimeWor
 $assert(strpos($runtimeWorkflow, 'permissions:') !== false && strpos($runtimeWorkflow, 'contents: read') !== false, 'Runtime workflow must keep read-only repository permissions.');
 $assert(strpos($runtimeWorkflow, 'timeout-minutes: 20') !== false, 'Runtime job must have a bounded timeout.');
 $assert(strpos($runtimeWorkflow, 'ce34ddd838f7351d6759068d09793f26755463b4a4610a5a5c0a97b68220d85c') !== false, 'WP-CLI download must retain its verified SHA-256.');
-$assert(strpos($runtimeWorkflow, 'WordPress 6.2.11') !== false && strpos($runtimeWorkflow, 'WordPress 7.1') !== false, 'Runtime workflow must cover the minimum and current WordPress matrices.');
+$assert(strpos($runtimeWorkflow, 'WordPress 6.2.11') !== false && strpos($runtimeWorkflow, 'WordPress 7.0.4') !== false, 'Runtime workflow must cover the minimum and supported ecosystem WordPress matrices.');
 $assert(strpos($releaseWorkflow, 'needs: runtime-gate') !== false, 'Draft releases must wait for the clean runtime gate.');
 $assert(preg_match('/^\/dist\/$/m', $gitignore) === 1, 'Generated release artifacts must remain ignored under dist/.');
 
