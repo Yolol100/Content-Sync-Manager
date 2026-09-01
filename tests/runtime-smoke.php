@@ -4,8 +4,6 @@
  * the generated release ZIP.
  */
 
-declare(strict_types=1);
-
 if (!defined('ABSPATH')) {
     fwrite(STDERR, "Run this script through WP-CLI eval-file.\n");
     exit(1);
