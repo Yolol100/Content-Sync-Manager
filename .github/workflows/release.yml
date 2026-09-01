@@ -1,0 +1,68 @@
+name: Draft release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: read
+
+jobs:
+  verify-and-package:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout tagged source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up PHP
+        uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240 # 2.37.2
+        with:
+          php-version: '8.3'
+          coverage: none
+
+      - name: Verify source
+        shell: bash
+        run: |
+          set -euo pipefail
+          while IFS= read -r -d '' file; do
+            php -l "$file"
+          done < <(find . -type f -name '*.php' -not -path './.git/*' -print0)
+          node --check assets/admin.js
+          php tests/static-audit.php
+
+      - name: Build reproducible package
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: python scripts/build_release.py
+
+      - name: Verify reproducibility
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          first_checksum="$(cut -d ' ' -f 1 dist/*.sha256)"
+          python scripts/build_release.py
+          second_checksum="$(cut -d ' ' -f 1 dist/*.sha256)"
+          test "$first_checksum" = "$second_checksum"
+
+      - name: Create draft GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh release create "$GITHUB_REF_NAME" \
+            dist/content-sync-manager-*.zip \
+            dist/content-sync-manager-*.zip.sha256 \
+            --draft \
+            --generate-notes \
+            --title "Content Sync Manager $GITHUB_REF_NAME" \
+            --verify-tag
