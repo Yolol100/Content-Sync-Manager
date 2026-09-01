@@ -25,7 +25,12 @@ Admin-only mini-plugin voor TXT export/import van berichten, pagina’s, product
 
 - WordPress 6.2+
 - PHP 7.4+
-- ACF voor pagina-, product- en custom-post-typevelden wanneer die via ACF worden beheerd
+- ACF 6.8.9 voor pagina-, product- en custom-post-typevelden wanneer die via ACF worden beheerd
+- Voor WooCommerce-producten: WordPress 6.9+ en WooCommerce 11.0.1
+
+De releasegate test zowel WordPress 6.2.11/PHP 7.4/ACF 6.8.9 als de gezamenlijk ondersteunde ecosystemcombinatie WordPress 7.0.4/PHP 8.3/ACF 6.8.9/WooCommerce 11.0.1. In beide omgevingen wordt de gebouwde ZIP schoon geïnstalleerd en geforceerd bijgewerkt. Daarna worden export, preview, import, importlog en herstel op echte WordPress-content uitgevoerd; de ecosystemmatrix test daarnaast een WooCommerce-product.
+
+Bekende testbeperking: WooCommerce 11.0.1 schrijft tijdens de WP-CLI-runtime één `_load_textdomain_just_in_time`-notice voor zijn eigen `woocommerce`-tekstdomein. De gate staat alleen die exact herkenbare upstreammelding toe en faalt bij iedere andere notice, warning, fatal of debugregel. De Content Sync-flows zelf moeten zonder eigen debugmelding slagen.
 
 Wanneer ACF niet actief of niet volledig beschikbaar is, toont de plugin in de pagina-/productlijst een admin-waarschuwing. Imports met ACF-velden worden dan server-side geblokkeerd; berichtimports zonder ACF blijven bruikbaar.
 
@@ -57,7 +62,7 @@ Zet oude Code Snippets/WPCode-versies of oude pluginvarianten eerst uit voordat 
 
 ## Releaseproces
 
-1. Voer de quality gate uit en test de plugin-ZIP op een schone staginginstallatie met een back-up.
+1. Laat de quality gate en de geautomatiseerde schone WordPress-runtimegate slagen en test de plugin-ZIP daarna nog op een representatieve staginginstallatie met een back-up.
 2. Controleer dat de versie in de pluginheader, `DCA_TB_VERSION` en de `Stable tag` gelijk is.
 3. Maak pas daarna de bijpassende tag, bijvoorbeeld `v1.2.61`.
 4. De tagworkflow bouwt de ZIP tweemaal, vergelijkt de SHA-256-checksums en maakt een **conceptrelease** met ZIP en checksum.

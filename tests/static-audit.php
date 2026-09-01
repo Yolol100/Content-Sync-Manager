@@ -34,7 +34,11 @@ $adminJs = $read('assets/admin.js');
 $readme = $read('readme.txt');
 $readmeMd = $read('README.md');
 $workflow = $read('.github/workflows/quality.yml');
+$runtimeWorkflow = $read('.github/workflows/runtime-release-gate.yml');
+$releaseWorkflow = $read('.github/workflows/release.yml');
 $gitignore = $read('.gitignore');
+$read('tests/runtime-smoke.php');
+$debugLogCheck = $read('scripts/check_runtime_debug_log.py');
 $read('assets/admin.css');
 $read('uninstall.php');
 
@@ -80,6 +84,20 @@ $assert(preg_match('/uses:\s*shivammathur\/setup-php@[0-9a-f]{40}/', $workflow) 
 $assert(strpos($workflow, 'persist-credentials: false') !== false, 'Checkout credentials must not persist in the quality job.');
 $assert(strpos($workflow, 'permissions:') !== false && strpos($workflow, 'contents: read') !== false, 'Quality workflow must keep read-only repository permissions.');
 $assert(strpos($workflow, 'timeout-minutes: 10') !== false, 'Quality job must have a bounded timeout.');
+$assert(preg_match('/uses:\s*actions\/checkout@[0-9a-f]{40}/', $runtimeWorkflow) === 1, 'Runtime checkout action must be pinned to a full commit SHA.');
+$assert(preg_match('/uses:\s*shivammathur\/setup-php@[0-9a-f]{40}/', $runtimeWorkflow) === 1, 'Runtime PHP action must be pinned to a full commit SHA.');
+$assert(strpos($runtimeWorkflow, 'permissions:') !== false && strpos($runtimeWorkflow, 'contents: read') !== false, 'Runtime workflow must keep read-only repository permissions.');
+$assert(strpos($runtimeWorkflow, 'timeout-minutes: 20') !== false, 'Runtime job must have a bounded timeout.');
+$assert(strpos($runtimeWorkflow, 'ce34ddd838f7351d6759068d09793f26755463b4a4610a5a5c0a97b68220d85c') !== false, 'WP-CLI download must retain its verified SHA-256.');
+$assert(strpos($runtimeWorkflow, 'WordPress 6.2.11') !== false && strpos($runtimeWorkflow, 'WordPress 7.0.4') !== false, 'Runtime workflow must cover the minimum and supported ecosystem WordPress matrices.');
+$assert(strpos($runtimeWorkflow, 'scripts/check_runtime_debug_log.py') !== false, 'Runtime workflow must reject unexpected WordPress debug output.');
+$assert(
+    strpos($debugLogCheck, '"<code>woocommerce</code>"') !== false
+    && strpos($debugLogCheck, '"triggered too early"') !== false
+    && strpos($debugLogCheck, 'len(allowed) > 1') !== false,
+    'Debug-log allowlist must remain limited to one documented WooCommerce CLI notice.'
+);
+$assert(strpos($releaseWorkflow, 'needs: runtime-gate') !== false, 'Draft releases must wait for the clean runtime gate.');
 $assert(preg_match('/^\/dist\/$/m', $gitignore) === 1, 'Generated release artifacts must remain ignored under dist/.');
 
 $forbiddenPatterns = [
