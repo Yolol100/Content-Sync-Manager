@@ -144,7 +144,7 @@ $media_export_import = static function () use ($assert): array {
     $export = dca_tb_ai_image_context_build_media_export([$attachment_id]);
     $assert($export !== '', 'Selected Media Library image export returned no text.');
     $assert(strpos($export, 'AI AFBEELDINGSCONTEXT MEDIA-EXPORT') !== false, 'Media export header is missing.');
-    $assert(strpos($export, 'Schema: 3') !== false, 'Media export schema is not current.');
+    $assert(strpos($export, 'Schema: 4') !== false, 'Media export schema is not current.');
     $assert(strpos($export, 'Attachment ID: ' . $attachment_id) !== false, 'Media export is missing the selected attachment ID.');
     $assert(strpos($export, 'Runtime media title') !== false, 'Media export is missing attachment title metadata.');
     $assert(strpos($export, 'Runtime media alt') !== false, 'Media export is missing attachment alt metadata.');
