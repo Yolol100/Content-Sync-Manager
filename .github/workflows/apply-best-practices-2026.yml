@@ -46,8 +46,10 @@ jobs:
           done < <(find . -type f -name '*.php' -not -path './vendor/*' -not -path './.git/*' -print0)
           node --check assets/admin.js
           node --check assets/ai-image-context.js
+          mv vendor "$RUNNER_TEMP/content-sync-vendor"
           php tests/static-audit.php
           php tests/ai-image-context-static.php
+          mv "$RUNNER_TEMP/content-sync-vendor" vendor
 
       - name: Show WPCS findings before commit
         shell: bash
