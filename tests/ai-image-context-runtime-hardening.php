@@ -44,6 +44,16 @@ $assert(!is_wp_error($attachment_id) && $attachment_id > 0, 'Unable to create ru
 
 $metadata = wp_generate_attachment_metadata($attachment_id, $path);
 $assert(is_array($metadata) && !empty($metadata['width']) && !empty($metadata['height']), 'Attachment metadata generation failed.');
+$thumbnail_file = pathinfo($filename, PATHINFO_FILENAME) . '-150x150.png';
+if (empty($metadata['sizes']) || !is_array($metadata['sizes'])) {
+    $metadata['sizes'] = [];
+}
+$metadata['sizes']['thumbnail'] = [
+    'file' => $thumbnail_file,
+    'width' => 150,
+    'height' => 150,
+    'mime-type' => 'image/png',
+];
 wp_update_attachment_metadata($attachment_id, $metadata);
 update_post_meta($attachment_id, '_wp_attachment_image_alt', "Alt line\nEINDE MEDIA IMPORT\nDescription:");
 
