@@ -643,56 +643,144 @@ function dca_tb_ai_image_context_post_media_refs($post_id) {
     return $refs;
 }
 
-function dca_tb_ai_image_context_value_contains_url($value, $url, $depth = 0) {
-    if ($depth > 10 || $url === '') {
-        return false;
+function dca_tb_ai_image_context_normalize_media_url($url) {
+    $url = html_entity_decode((string) $url, ENT_QUOTES, 'UTF-8');
+    $url = str_replace('\\/', '/', trim($url));
+
+    return $url;
+}
+
+function dca_tb_ai_image_context_add_media_url_target(&$targets, $url, $attachment_id) {
+    $attachment_id = absint($attachment_id);
+    $url = dca_tb_ai_image_context_normalize_media_url($url);
+
+    if (!$attachment_id || $url === '') {
+        return;
     }
+
+    if (!isset($targets['urls'][$url])) {
+        $targets['urls'][$url] = [];
+    }
+    $targets['urls'][$url][$attachment_id] = true;
+
+    $path = wp_parse_url($url, PHP_URL_PATH);
+    $path = is_string($path) ? rawurldecode($path) : '';
+    if ($path !== '') {
+        if (!isset($targets['paths'][$path])) {
+            $targets['paths'][$path] = [];
+        }
+        $targets['paths'][$path][$attachment_id] = true;
+    }
+}
+
+function dca_tb_ai_image_context_attachment_url_targets($attachment_ids) {
+    $attachment_ids = array_values(array_unique(array_filter(array_map('absint', (array) $attachment_ids))));
+    $targets = [
+        'urls' => [],
+        'paths' => [],
+    ];
+
+    foreach ($attachment_ids as $attachment_id) {
+        $urls = [];
+        $full_url = wp_get_attachment_url($attachment_id);
+        if (is_string($full_url) && $full_url !== '') {
+            $urls[] = $full_url;
+        }
+
+        if (function_exists('wp_get_original_image_url')) {
+            $original_url = wp_get_original_image_url($attachment_id);
+            if (is_string($original_url) && $original_url !== '') {
+                $urls[] = $original_url;
+            }
+        }
+
+        $metadata = wp_get_attachment_metadata($attachment_id);
+        $sizes = is_array($metadata) && !empty($metadata['sizes']) && is_array($metadata['sizes'])
+            ? array_keys($metadata['sizes'])
+            : [];
+
+        foreach ($sizes as $size_name) {
+            $src = wp_get_attachment_image_src($attachment_id, $size_name);
+            if ($src && !empty($src[0])) {
+                $urls[] = (string) $src[0];
+            }
+        }
+
+        foreach (array_values(array_unique($urls)) as $url) {
+            dca_tb_ai_image_context_add_media_url_target($targets, $url, $attachment_id);
+        }
+    }
+
+    return $targets;
+}
+
+function dca_tb_ai_image_context_collect_target_attachment_ids($value, $targets, $depth = 0) {
+    if ($depth > 10 || !is_array($targets)) {
+        return [];
+    }
+
+    $found = [];
 
     if (is_array($value)) {
         foreach ($value as $item) {
-            if (dca_tb_ai_image_context_value_contains_url($item, $url, $depth + 1)) {
-                return true;
+            foreach (dca_tb_ai_image_context_collect_target_attachment_ids($item, $targets, $depth + 1) as $attachment_id) {
+                $found[absint($attachment_id)] = true;
             }
         }
-        return false;
+        return array_values(array_filter(array_map('absint', array_keys($found))));
     }
 
     if (is_object($value)) {
-        return dca_tb_ai_image_context_value_contains_url(get_object_vars($value), $url, $depth + 1);
+        return dca_tb_ai_image_context_collect_target_attachment_ids(get_object_vars($value), $targets, $depth + 1);
     }
 
     if (!is_scalar($value)) {
-        return false;
+        return [];
     }
 
-    $text = (string) $value;
+    $text = html_entity_decode((string) $value, ENT_QUOTES, 'UTF-8');
+    $text = str_replace('\\/', '/', $text);
     if ($text === '') {
-        return false;
+        return [];
     }
 
-    if (strpos($text, $url) !== false || strpos($text, str_replace('/', '\\/', $url)) !== false) {
-        return true;
+    if (!preg_match_all("~https?://[^[:space:]<>\\\"']+~i", $text, $matches)) {
+        return [];
     }
 
-    $unserialized = maybe_unserialize($text);
-    if ($unserialized !== $text && dca_tb_ai_image_context_value_contains_url($unserialized, $url, $depth + 1)) {
-        return true;
+    foreach ((array) ($matches[0] ?? []) as $candidate) {
+        $candidate = dca_tb_ai_image_context_normalize_media_url(rtrim((string) $candidate, '.,;)]}'));
+        if ($candidate === '') {
+            continue;
+        }
+
+        if (isset($targets['urls'][$candidate])) {
+            foreach ((array) $targets['urls'][$candidate] as $attachment_id => $enabled) {
+                if ($enabled) {
+                    $found[absint($attachment_id)] = true;
+                }
+            }
+        }
+
+        $path = wp_parse_url($candidate, PHP_URL_PATH);
+        $path = is_string($path) ? rawurldecode($path) : '';
+        if ($path !== '' && isset($targets['paths'][$path])) {
+            foreach ((array) $targets['paths'][$path] as $attachment_id => $enabled) {
+                if ($enabled) {
+                    $found[absint($attachment_id)] = true;
+                }
+            }
+        }
     }
 
-    $decoded = json_decode($text, true);
-    if (is_array($decoded) && dca_tb_ai_image_context_value_contains_url($decoded, $url, $depth + 1)) {
-        return true;
-    }
-
-    return false;
+    return array_values(array_filter(array_map('absint', array_keys($found))));
 }
 
-function dca_tb_ai_image_context_private_meta_url_refs($post_id, $attachment_ids) {
+function dca_tb_ai_image_context_private_meta_url_refs($post_id, $url_targets) {
     $post_id = absint($post_id);
-    $attachment_ids = array_values(array_unique(array_filter(array_map('absint', (array) $attachment_ids))));
     $refs = [];
 
-    if (!$post_id || !$attachment_ids) {
+    if (!$post_id || !is_array($url_targets) || (empty($url_targets['urls']) && empty($url_targets['paths']))) {
         return $refs;
     }
 
@@ -707,17 +795,20 @@ function dca_tb_ai_image_context_private_meta_url_refs($post_id, $attachment_ids
             continue;
         }
 
+        $attachment_ids = dca_tb_ai_image_context_collect_target_attachment_ids($values, $url_targets);
+        if (!$attachment_ids) {
+            continue;
+        }
+
+        $source = 'meta:' . $meta_key;
         foreach ($attachment_ids as $attachment_id) {
-            $url = (string) wp_get_attachment_url($attachment_id);
-            if ($url === '' || !dca_tb_ai_image_context_value_contains_url($values, $url)) {
+            $attachment_id = absint($attachment_id);
+            if (!$attachment_id) {
                 continue;
             }
-
             if (!isset($refs[$attachment_id])) {
                 $refs[$attachment_id] = [];
             }
-
-            $source = 'meta:' . $meta_key;
             if (!in_array($source, $refs[$attachment_id], true)) {
                 $refs[$attachment_id][] = $source;
             }
@@ -747,6 +838,7 @@ function dca_tb_ai_image_context_usage_post_types() {
 function dca_tb_ai_image_context_site_usage_scan($attachment_ids) {
     $attachment_ids = array_values(array_unique(array_filter(array_map('absint', (array) $attachment_ids))));
     $targets = array_fill_keys($attachment_ids, true);
+    $private_meta_targets = dca_tb_ai_image_context_attachment_url_targets($attachment_ids);
     $usage = [];
     foreach ($attachment_ids as $attachment_id) {
         $usage[$attachment_id] = [];
@@ -781,7 +873,7 @@ function dca_tb_ai_image_context_site_usage_scan($attachment_ids) {
 
     foreach ($post_ids as $post_id) {
         $refs = dca_tb_ai_image_context_post_media_refs($post_id);
-        $private_meta_refs = dca_tb_ai_image_context_private_meta_url_refs($post_id, $attachment_ids);
+        $private_meta_refs = dca_tb_ai_image_context_private_meta_url_refs($post_id, $private_meta_targets);
 
         foreach ($private_meta_refs as $attachment_id => $sources) {
             $attachment_id = absint($attachment_id);

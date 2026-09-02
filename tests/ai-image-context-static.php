@@ -55,6 +55,8 @@ $assert(strpos($module, "acf_fc_layout") !== false, 'Flexible Content layout nam
 $assert(strpos($module, 'dca_tb_ai_image_context_site_usage_scan') !== false, 'WordPress-wide media usage scan is missing.');
 $assert(strpos($module, 'DCA_TB_AI_IMAGE_CONTEXT_USAGE_SCAN_MAX_POSTS') !== false, 'Usage scan safety limit is missing.');
 $assert(strpos($module, 'dca_tb_ai_image_context_private_meta_url_refs') !== false, 'Private builder metadata must be scanned before physical media renames.');
+$assert(strpos($module, 'dca_tb_ai_image_context_attachment_url_targets') !== false, 'Private metadata scan must precompute full and intermediate attachment URL targets.');
+$assert(strpos($module, 'dca_tb_ai_image_context_collect_target_attachment_ids') !== false, 'Private metadata values must be traversed once against the precomputed URL target map.');
 $assert(strpos($module, "\$source = 'meta:' . \$meta_key;") !== false, 'Private metadata usage must be surfaced in usage sources.');
 $assert(strpos($module, 'dca_tb_ai_image_context_media_import_block') !== false, 'Round-trip MEDIA IMPORT block is missing.');
 $assert(strpos($module, 'EINDE MEDIA IMPORT') !== false, 'MEDIA IMPORT end marker is missing.');

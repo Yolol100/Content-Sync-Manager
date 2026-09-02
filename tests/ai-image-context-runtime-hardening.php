@@ -80,6 +80,12 @@ $builder_post_id = wp_insert_post([
 $assert($builder_post_id > 0, 'Unable to create builder metadata fixture post.');
 
 $attachment_url = wp_get_attachment_url($attachment_id);
+$thumbnail_src = wp_get_attachment_image_src($attachment_id, 'thumbnail');
+$assert($thumbnail_src && !empty($thumbnail_src[0]), 'Hard-cropped thumbnail URL is unavailable for builder metadata fixture.');
+$thumbnail_url = (string) $thumbnail_src[0];
+$assert($thumbnail_url !== $attachment_url, 'Builder metadata fixture must use an intermediate-size URL.');
+$target_map = dca_tb_ai_image_context_attachment_url_targets([$attachment_id]);
+$assert(isset($target_map['urls'][$thumbnail_url][$attachment_id]), 'Intermediate-size attachment URL must be precomputed as a private metadata safety target.');
 update_post_meta($builder_post_id, '_elementor_data', wp_json_encode([
     [
         'elType' => 'widget',
@@ -87,7 +93,7 @@ update_post_meta($builder_post_id, '_elementor_data', wp_json_encode([
         'settings' => [
             'image' => [
                 'id' => $attachment_id,
-                'url' => $attachment_url,
+                'url' => $thumbnail_url,
             ],
         ],
     ],
