@@ -39,6 +39,7 @@ add_action('plugins_loaded', static function () {
 
 require_once DCA_TB_PLUGIN_DIR . 'includes/manager.php';
 require_once DCA_TB_PLUGIN_DIR . 'includes/ai-image-context.php';
+require_once DCA_TB_PLUGIN_DIR . 'includes/ai-media-index.php';
 
 /*
  * Keep the client-side manager and the server-rendered modals on the same
