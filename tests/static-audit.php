@@ -104,8 +104,11 @@ $assert(strpos($runtimeWorkflow, 'scripts/check_runtime_debug_log.py') !== false
 $assert(
     strpos($debugLogCheck, '"<code>woocommerce</code>"') !== false
     && strpos($debugLogCheck, '"triggered too early"') !== false
-    && strpos($debugLogCheck, 'len(allowed) > 1') !== false,
-    'Debug-log allowlist must remain limited to one documented WooCommerce CLI notice.'
+    && strpos($debugLogCheck, 'len(allowed_woocommerce) > 1') !== false
+    && strpos($debugLogCheck, '"Using null as an array offset is deprecated, use an empty string instead"') !== false
+    && strpos($debugLogCheck, '"wp-cli.phar/vendor/wp-cli/php-cli-tools/lib/cli/Colors.php on line 95"') !== false
+    && strpos($debugLogCheck, 'else:\n        unexpected.append(line)') !== false,
+    'Debug-log allowlist must stay fail-closed and limited to the documented WooCommerce notice plus the exact WP-CLI 2.12.0 PHP 8.5 deprecation.'
 );
 $assert(strpos($releaseWorkflow, 'needs: runtime-gate') !== false, 'Draft releases must wait for the clean runtime gate.');
 $assert(preg_match('/^\/dist\/$/m', $gitignore) === 1, 'Generated release artifacts must remain ignored under dist/.');
