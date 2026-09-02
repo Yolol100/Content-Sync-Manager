@@ -17,9 +17,11 @@ Admin-only mini-plugin voor TXT export/import van berichten, pagina’s, product
 
 In Media > Bibliotheek werkt `AI afbeeldingen export` in zowel lijst- als rasterweergave. De export bevat per geselecteerde afbeelding de bestaande media-metadata, WordPress-gebruikslocaties, paginacontext, exacte ACF-paden voor image/gallery/group/repeater/flexible-content waar die beschikbaar zijn, plus tijdelijke niet-gecropte previews van maximaal 512 px en 1024 px.
 
-De tijdelijke previews worden in een aparte uploads-submap gemaakt en automatisch opgeschoond. Er worden geen externe AI- of trackingcalls vanuit de plugin gedaan.
+De tijdelijke previews worden in een aparte uploads-submap gemaakt en automatisch opgeschoond. Wanneer een tijdelijke preview niet kan worden gemaakt, wordt alleen een bestaande WordPress-resize gebruikt als die aantoonbaar niet gecropt is en dezelfde beeldverhouding als het origineel behoudt. Er worden geen externe AI- of trackingcalls vanuit de plugin gedaan.
 
-ChatGPT kan in de export alleen de velden onder `MEDIA IMPORT` aanpassen. Daarna kan hetzelfde TXT-bestand via `AI data importeren` worden gecontroleerd en teruggeschreven. De import vereist dezelfde nonce/capabilitygrens als Content Sync, een preview-hash van exact dezelfde TXT-inhoud en een expliciete bevestiging. Bestandsnaamwijzigingen hergebruiken de bestaande veilige media-renamefunctie. Als de WordPress-gebruiksscan onvolledig is of de afbeelding in een niet-ondersteund contenttype wordt gebruikt, wordt alleen de fysieke hernoeming geblokkeerd; veilige metadatawijzigingen kunnen wel doorgaan.
+ChatGPT kan in de export alleen de waarden `new_filename`, `title`, `alt`, `caption` en `description` in de JSON-regel onder `MEDIA IMPORT` aanpassen. JSON voorkomt dat gewone metadataregels zoals `Title:` of `EINDE MEDIA IMPORT` het importformaat kunnen breken. Oude 1.2.62-labelblokken blijven voor backwards compatibility importeerbaar.
+
+Daarna kan hetzelfde TXT-bestand via `AI data importeren` worden gecontroleerd en teruggeschreven. De import vereist dezelfde nonce/capabilitygrens als Content Sync, een preview-hash van exact dezelfde TXT-inhoud en een expliciete bevestiging. Bestandsnaamwijzigingen hergebruiken de bestaande veilige media-renamefunctie. Een fysieke hernoeming wordt fail-closed geblokkeerd als de gebruiksscan onvolledig is, als een vaste media-URL in private/buildermetadata zoals Elementor `_elementor_data` wordt gevonden, als een niet-ondersteunde opslaglocatie wordt gebruikt of als de huidige gebruiker niet iedere betrokken gebruikspagina mag bewerken. Veilige metadatawijzigingen kunnen dan nog wel doorgaan.
 
 ## Veilig gebruik
 
@@ -28,7 +30,7 @@ ChatGPT kan in de export alleen de velden onder `MEDIA IMPORT` aanpassen. Daarna
 - Gebruik altijd eerst `Controleer bestand` voordat je de normale Content Sync-import uitvoert.
 - De AI-media-import voert zelf eerst een server-side controle uit en bindt de uitvoering aan exact dezelfde TXT-inhoud.
 - Een import-run wordt server-side geblokkeerd wanneer de TXT-inhoud niet exact overeenkomt met de laatst gecontroleerde preview van dezelfde gebruiker.
-- Media hernoemen staat standaard aan via `DCA_TB_ALLOW_MEDIA_FILE_RENAME` en blijft achter de bestaande veiligheidschecks voor extensie, MIME-type, uploads-pad, doelbestand en back-up.
+- Media hernoemen staat standaard aan via `DCA_TB_ALLOW_MEDIA_FILE_RENAME` en blijft achter de bestaande veiligheidschecks voor extensie, MIME-type, uploads-pad, doelbestand, gebruikslocaties, rechten en back-up.
 
 ## Vereisten
 
@@ -37,7 +39,7 @@ ChatGPT kan in de export alleen de velden onder `MEDIA IMPORT` aanpassen. Daarna
 - ACF 6.8.9 voor pagina-, product- en custom-post-typevelden wanneer die via ACF worden beheerd
 - Voor WooCommerce-producten: WordPress 6.9+ en WooCommerce 11.0.1
 
-De releasegate test zowel WordPress 6.2.11/PHP 7.4/ACF 6.8.9 als de gezamenlijk ondersteunde ecosystemcombinatie WordPress 7.0.4/PHP 8.3/ACF 6.8.9/WooCommerce 11.0.1. In beide omgevingen wordt de gebouwde ZIP schoon geïnstalleerd en geforceerd bijgewerkt. Daarna worden export, preview, import, importlog en herstel op echte WordPress-content uitgevoerd; de ecosystemmatrix test daarnaast een WooCommerce-product en de AI-media-export/import met fysieke bestandsnaamwijziging.
+De releasegate test zowel WordPress 6.2.11/PHP 7.4/ACF 6.8.9 als de gezamenlijk ondersteunde ecosystemcombinatie WordPress 7.0.4/PHP 8.3/ACF 6.8.9/WooCommerce 11.0.1. In beide omgevingen wordt de gebouwde ZIP schoon geïnstalleerd en geforceerd bijgewerkt. Daarna worden export, preview, import, importlog en herstel op echte WordPress-content uitgevoerd; de ecosystemmatrix test daarnaast een WooCommerce-product en de AI-media-export/import met fysieke bestandsnaamwijziging. De AI-media hardeningtest controleert bovendien builder/private metadata, gebruikspagina-rechten, JSON round-trip met delimiterteksten en het weigeren van gecropte previewfallbacks.
 
 Bekende testbeperking: WooCommerce 11.0.1 schrijft tijdens de WP-CLI-runtime één `_load_textdomain_just_in_time`-notice voor zijn eigen `woocommerce`-tekstdomein. De gate staat alleen die exact herkenbare upstreammelding toe en faalt bij iedere andere notice, warning, fatal of debugregel. De Content Sync-flows zelf moeten zonder eigen debugmelding slagen.
 
@@ -93,10 +95,10 @@ python scripts/build_release.py
 ### 1.2.62
 
 - AI Media: exportknoppen werken in Media Bibliotheek lijst- en rasterweergave en lezen alleen de geselecteerde afbeeldingen.
-- Preview: tijdelijke 512 px- en 1024 px-previews worden zonder onnodige crop gemaakt, met automatische opschoning en fail-closed fallback.
-- Context: export bevat een WordPress-gebruiksscan en exacte ACF-paden voor gallery, group, repeater en flexible content waar beschikbaar.
-- Round-trip: `MEDIA IMPORT`-blokken kunnen na AI-bewerking via `AI data importeren` veilig worden gecontroleerd en teruggeschreven naar bestandsnaam, title, alt, caption en description.
-- Safety: import vereist exact-preview binding en bevestiging; risicovolle fysieke hernoemingen worden geblokkeerd bij een onvolledige scan of gebruik in niet-ondersteunde contenttypes.
-- Quality: regressie- en runtimecoverage uitgebreid met AI-media-export/import, fysieke rename en geneste ACF-padcontrole.
+- Preview: tijdelijke 512 px- en 1024 px-previews worden zonder onnodige crop gemaakt, met automatische opschoning en fail-closed fallback; bestaande fallback-resizes moeten niet-gecropt zijn en de originele beeldverhouding behouden.
+- Context: export bevat een WordPress-gebruiksscan en exacte ACF-paden voor gallery, group, repeater en flexible content waar beschikbaar; vaste URLs in private/buildermetadata worden als onveilige rename-locatie gemarkeerd.
+- Round-trip: `MEDIA IMPORT` gebruikt een collision-safe JSON-regel; oude labelblokken blijven importeerbaar.
+- Safety: import vereist exact-preview binding en bevestiging; fysieke hernoeming wordt ook geblokkeerd als niet alle gebruikspagina's door de huidige gebruiker bewerkt mogen worden.
+- Quality: regressie- en runtimecoverage omvat AI-media-export/import, fysieke rename, geneste ACF-paden, Elementor/private metadata, permissiegrenzen, delimiterteksten en cropfallbacks.
 
 Zie [CHANGELOG.md](CHANGELOG.md) voor de volledige versiehistorie.

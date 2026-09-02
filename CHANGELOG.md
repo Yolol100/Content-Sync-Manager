@@ -2,11 +2,11 @@
 
 ### 1.2.62
 - AI Media: exportknoppen werken in Media Bibliotheek lijst- en rasterweergave en lezen alleen de geselecteerde afbeeldingen.
-- Preview: tijdelijke 512 px- en 1024 px-previews worden zonder onnodige crop gemaakt, met automatische opschoning en fail-closed fallback.
-- Context: export bevat een WordPress-gebruiksscan en exacte ACF-paden voor gallery, group, repeater en flexible content waar beschikbaar.
-- Round-trip: `MEDIA IMPORT`-blokken kunnen na AI-bewerking via `AI data importeren` veilig worden gecontroleerd en teruggeschreven naar bestandsnaam, title, alt, caption en description.
-- Safety: import vereist exact-preview binding en expliciete bevestiging; fysieke hernoemingen worden geblokkeerd bij een onvolledige scan of gebruik in niet-ondersteunde contenttypes.
-- Quality: regressie- en runtimecoverage uitgebreid met AI-media-export/import, fysieke rename en geneste ACF-padcontrole.
+- Preview: tijdelijke 512 px- en 1024 px-previews worden zonder onnodige crop gemaakt, met automatische opschoning en fail-closed fallback; bestaande fallback-resizes worden alleen gebruikt wanneer crop uit staat en de originele beeldverhouding behouden blijft.
+- Context: export bevat een WordPress-gebruiksscan en exacte ACF-paden voor gallery, group, repeater en flexible content waar beschikbaar; vaste media-URLs in private/buildermetadata zoals Elementor `_elementor_data` worden als onveilige rename-locatie gedetecteerd.
+- Round-trip: `MEDIA IMPORT` gebruikt een collision-safe JSON-regel voor nieuwe exports, terwijl oude labelblokken backwards compatible importeerbaar blijven.
+- Safety: import vereist exact-preview binding en expliciete bevestiging; fysieke hernoeming wordt geblokkeerd bij een onvolledige scan, onveilige/niet-ondersteunde opslaglocaties of wanneer de huidige gebruiker niet iedere betrokken gebruikspagina mag bewerken.
+- Quality: regressie- en runtimecoverage omvat AI-media-export/import, fysieke rename, geneste ACF-paden, builder/private metadata, gebruikspagina-rechten, delimiterteksten en cropfallbacks.
 
 ### 1.2.61
 - Fix: selectie voor TXT-export leest de WordPress `post[]`/`delete_tags[]`-vakjes direct en is niet meer afhankelijk van een `th.check-column`-wrapper.

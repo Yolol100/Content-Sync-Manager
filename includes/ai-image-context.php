@@ -205,12 +205,42 @@ if (defined('DCA_TB_PLUGIN_FILE')) {
     register_deactivation_hook(DCA_TB_PLUGIN_FILE, 'dca_tb_ai_image_context_deactivate');
 }
 
+function dca_tb_ai_image_context_dimensions_preserve_ratio($source_width, $source_height, $candidate_width, $candidate_height) {
+    $source_width = absint($source_width);
+    $source_height = absint($source_height);
+    $candidate_width = absint($candidate_width);
+    $candidate_height = absint($candidate_height);
+
+    if (!$source_width || !$source_height || !$candidate_width || !$candidate_height) {
+        return false;
+    }
+
+    $source_ratio = $source_width / $source_height;
+    $candidate_ratio = $candidate_width / $candidate_height;
+    $relative_delta = abs($candidate_ratio - $source_ratio) / max($source_ratio, 0.000001);
+
+    return $relative_delta <= 0.02;
+}
+
 function dca_tb_ai_image_context_existing_preview($attachment_id, $max_dimension) {
     $best = null;
     $max_dimension = max(1, absint($max_dimension));
+    $metadata = wp_get_attachment_metadata($attachment_id);
+    $source_width = is_array($metadata) && !empty($metadata['width']) ? absint($metadata['width']) : 0;
+    $source_height = is_array($metadata) && !empty($metadata['height']) ? absint($metadata['height']) : 0;
+
+    if (!$source_width || !$source_height) {
+        return null;
+    }
+
+    $registered = function_exists('wp_get_registered_image_subsizes') ? wp_get_registered_image_subsizes() : [];
     $sizes = array_unique(array_merge(['medium_large', 'medium', 'thumbnail'], get_intermediate_image_sizes()));
 
     foreach ($sizes as $size) {
+        if (isset($registered[$size]) && !empty($registered[$size]['crop'])) {
+            continue;
+        }
+
         $preview = wp_get_attachment_image_src($attachment_id, $size);
         if (!$preview || empty($preview[0])) {
             continue;
@@ -221,6 +251,10 @@ function dca_tb_ai_image_context_existing_preview($attachment_id, $max_dimension
         $largest = max($width, $height);
 
         if ($largest < 1 || $largest > $max_dimension) {
+            continue;
+        }
+
+        if (!dca_tb_ai_image_context_dimensions_preserve_ratio($source_width, $source_height, $width, $height)) {
             continue;
         }
 
@@ -609,6 +643,181 @@ function dca_tb_ai_image_context_post_media_refs($post_id) {
     return $refs;
 }
 
+function dca_tb_ai_image_context_normalize_media_url($url) {
+    $url = html_entity_decode((string) $url, ENT_QUOTES, 'UTF-8');
+    $url = str_replace('\\/', '/', trim($url));
+
+    return $url;
+}
+
+function dca_tb_ai_image_context_add_media_url_target(&$targets, $url, $attachment_id) {
+    $attachment_id = absint($attachment_id);
+    $url = dca_tb_ai_image_context_normalize_media_url($url);
+
+    if (!$attachment_id || $url === '') {
+        return;
+    }
+
+    if (!isset($targets['urls'][$url])) {
+        $targets['urls'][$url] = [];
+    }
+    $targets['urls'][$url][$attachment_id] = true;
+
+    $path = wp_parse_url($url, PHP_URL_PATH);
+    $path = is_string($path) ? rawurldecode($path) : '';
+    if ($path !== '') {
+        if (!isset($targets['paths'][$path])) {
+            $targets['paths'][$path] = [];
+        }
+        $targets['paths'][$path][$attachment_id] = true;
+    }
+}
+
+function dca_tb_ai_image_context_attachment_url_targets($attachment_ids) {
+    $attachment_ids = array_values(array_unique(array_filter(array_map('absint', (array) $attachment_ids))));
+    $targets = [
+        'urls' => [],
+        'paths' => [],
+    ];
+
+    foreach ($attachment_ids as $attachment_id) {
+        $urls = [];
+        $full_url = wp_get_attachment_url($attachment_id);
+        if (is_string($full_url) && $full_url !== '') {
+            $urls[] = $full_url;
+        }
+
+        if (function_exists('wp_get_original_image_url')) {
+            $original_url = wp_get_original_image_url($attachment_id);
+            if (is_string($original_url) && $original_url !== '') {
+                $urls[] = $original_url;
+            }
+        }
+
+        $metadata = wp_get_attachment_metadata($attachment_id);
+        $sizes = is_array($metadata) && !empty($metadata['sizes']) && is_array($metadata['sizes'])
+            ? array_keys($metadata['sizes'])
+            : [];
+
+        foreach ($sizes as $size_name) {
+            $src = wp_get_attachment_image_src($attachment_id, $size_name);
+            if ($src && !empty($src[0])) {
+                $urls[] = (string) $src[0];
+            }
+        }
+
+        foreach (array_values(array_unique($urls)) as $url) {
+            dca_tb_ai_image_context_add_media_url_target($targets, $url, $attachment_id);
+        }
+    }
+
+    return $targets;
+}
+
+function dca_tb_ai_image_context_collect_target_attachment_ids($value, $targets, $depth = 0) {
+    if ($depth > 10 || !is_array($targets)) {
+        return [];
+    }
+
+    $found = [];
+
+    if (is_array($value)) {
+        foreach ($value as $item) {
+            foreach (dca_tb_ai_image_context_collect_target_attachment_ids($item, $targets, $depth + 1) as $attachment_id) {
+                $found[absint($attachment_id)] = true;
+            }
+        }
+        return array_values(array_filter(array_map('absint', array_keys($found))));
+    }
+
+    if (is_object($value)) {
+        return dca_tb_ai_image_context_collect_target_attachment_ids(get_object_vars($value), $targets, $depth + 1);
+    }
+
+    if (!is_scalar($value)) {
+        return [];
+    }
+
+    $text = html_entity_decode((string) $value, ENT_QUOTES, 'UTF-8');
+    $text = str_replace('\\/', '/', $text);
+    if ($text === '') {
+        return [];
+    }
+
+    if (!preg_match_all("~https?://[^[:space:]<>\\\"']+~i", $text, $matches)) {
+        return [];
+    }
+
+    foreach ((array) ($matches[0] ?? []) as $candidate) {
+        $candidate = dca_tb_ai_image_context_normalize_media_url(rtrim((string) $candidate, '.,;)]}'));
+        if ($candidate === '') {
+            continue;
+        }
+
+        if (isset($targets['urls'][$candidate])) {
+            foreach ((array) $targets['urls'][$candidate] as $attachment_id => $enabled) {
+                if ($enabled) {
+                    $found[absint($attachment_id)] = true;
+                }
+            }
+        }
+
+        $path = wp_parse_url($candidate, PHP_URL_PATH);
+        $path = is_string($path) ? rawurldecode($path) : '';
+        if ($path !== '' && isset($targets['paths'][$path])) {
+            foreach ((array) $targets['paths'][$path] as $attachment_id => $enabled) {
+                if ($enabled) {
+                    $found[absint($attachment_id)] = true;
+                }
+            }
+        }
+    }
+
+    return array_values(array_filter(array_map('absint', array_keys($found))));
+}
+
+function dca_tb_ai_image_context_private_meta_url_refs($post_id, $url_targets) {
+    $post_id = absint($post_id);
+    $refs = [];
+
+    if (!$post_id || !is_array($url_targets) || (empty($url_targets['urls']) && empty($url_targets['paths']))) {
+        return $refs;
+    }
+
+    $all_meta = get_post_meta($post_id);
+    if (!is_array($all_meta)) {
+        return $refs;
+    }
+
+    foreach ($all_meta as $meta_key => $values) {
+        $meta_key = (string) $meta_key;
+        if ($meta_key === '' || strpos($meta_key, '_') !== 0) {
+            continue;
+        }
+
+        $attachment_ids = dca_tb_ai_image_context_collect_target_attachment_ids($values, $url_targets);
+        if (!$attachment_ids) {
+            continue;
+        }
+
+        $source = 'meta:' . $meta_key;
+        foreach ($attachment_ids as $attachment_id) {
+            $attachment_id = absint($attachment_id);
+            if (!$attachment_id) {
+                continue;
+            }
+            if (!isset($refs[$attachment_id])) {
+                $refs[$attachment_id] = [];
+            }
+            if (!in_array($source, $refs[$attachment_id], true)) {
+                $refs[$attachment_id][] = $source;
+            }
+        }
+    }
+
+    return $refs;
+}
+
 function dca_tb_ai_image_context_usage_post_types() {
     $post_types = get_post_types([], 'names');
     $excluded = [
@@ -629,6 +838,7 @@ function dca_tb_ai_image_context_usage_post_types() {
 function dca_tb_ai_image_context_site_usage_scan($attachment_ids) {
     $attachment_ids = array_values(array_unique(array_filter(array_map('absint', (array) $attachment_ids))));
     $targets = array_fill_keys($attachment_ids, true);
+    $private_meta_targets = dca_tb_ai_image_context_attachment_url_targets($attachment_ids);
     $usage = [];
     foreach ($attachment_ids as $attachment_id) {
         $usage[$attachment_id] = [];
@@ -663,6 +873,25 @@ function dca_tb_ai_image_context_site_usage_scan($attachment_ids) {
 
     foreach ($post_ids as $post_id) {
         $refs = dca_tb_ai_image_context_post_media_refs($post_id);
+        $private_meta_refs = dca_tb_ai_image_context_private_meta_url_refs($post_id, $private_meta_targets);
+
+        foreach ($private_meta_refs as $attachment_id => $sources) {
+            $attachment_id = absint($attachment_id);
+            if (!$attachment_id || !isset($targets[$attachment_id])) {
+                continue;
+            }
+
+            if (!isset($refs[$attachment_id]) || !is_array($refs[$attachment_id])) {
+                $refs[$attachment_id] = ['sources' => []];
+            }
+            if (!isset($refs[$attachment_id]['sources']) || !is_array($refs[$attachment_id]['sources'])) {
+                $refs[$attachment_id]['sources'] = [];
+            }
+
+            $refs[$attachment_id]['sources'] = array_values(array_unique(array_merge($refs[$attachment_id]['sources'], $sources)));
+            $refs[$attachment_id]['unsafe_private_meta'] = true;
+        }
+
         if (!$refs) {
             continue;
         }
@@ -680,7 +909,8 @@ function dca_tb_ai_image_context_site_usage_scan($attachment_ids) {
 
             $sources = !empty($ref['sources']) && is_array($ref['sources']) ? array_values(array_unique(array_map('strval', $ref['sources']))) : [];
             $paths = !empty($ref['acf_paths']) && is_array($ref['acf_paths']) ? array_values($ref['acf_paths']) : [];
-            $supported = function_exists('dca_tb_is_supported_post_type') && dca_tb_is_supported_post_type($post->post_type);
+            $post_type_supported = function_exists('dca_tb_is_supported_post_type') && dca_tb_is_supported_post_type($post->post_type);
+            $unsafe_private_meta = !empty($ref['unsafe_private_meta']);
 
             $usage[$attachment_id][] = [
                 'post_id' => $post_id,
@@ -690,7 +920,8 @@ function dca_tb_ai_image_context_site_usage_scan($attachment_ids) {
                 'sources' => $sources,
                 'acf_paths' => $paths,
                 'context' => dca_tb_ai_image_context_page_text($post_id, 1400),
-                'supported' => $supported,
+                'supported' => $post_type_supported && !$unsafe_private_meta,
+                'unsafe_private_meta' => $unsafe_private_meta,
             ];
         }
     }
@@ -722,6 +953,9 @@ function dca_tb_ai_image_context_usage_lines($scan, $attachment_id) {
         $lines[] = 'Gebruik ' . $number . ' URL: ' . esc_url_raw($entry['url'] ?? '');
         $lines[] = 'Gebruik ' . $number . ' bron: ' . implode(', ', array_map('dca_tb_clean_text', (array) ($entry['sources'] ?? [])));
         $lines[] = 'Gebruik ' . $number . ' context: ' . dca_tb_ai_image_context_clean_excerpt($entry['context'] ?? '', 1400);
+        if (!empty($entry['unsafe_private_meta'])) {
+            $lines[] = 'Gebruik ' . $number . ' hernoemstatus: geblokkeerd wegens private/builder metadata met een vaste media-URL.';
+        }
 
         foreach ((array) ($entry['acf_paths'] ?? []) as $path_data) {
             if (!is_array($path_data) || empty($path_data['path'])) {
@@ -750,24 +984,23 @@ function dca_tb_ai_image_context_media_import_block($attachment_id) {
         return '';
     }
 
-    return trim(implode("\n", [
-        'MEDIA IMPORT',
-        'Attachment ID:',
-        (string) $attachment_id,
-        'Bestandsnaam:',
-        function_exists('dca_tb_media_filename') ? dca_tb_media_filename($attachment_id) : '',
-        'Nieuwe bestandsnaam:',
-        '',
-        'Title:',
-        dca_tb_text($attachment->post_title),
-        'Alt text:',
-        dca_tb_text(get_post_meta($attachment_id, '_wp_attachment_image_alt', true)),
-        'Caption:',
-        dca_tb_text($attachment->post_excerpt),
-        'Description:',
-        dca_tb_text($attachment->post_content),
-        'EINDE MEDIA IMPORT',
-    ]));
+    $payload = [
+        'schema' => 2,
+        'attachment_id' => $attachment_id,
+        'filename' => function_exists('dca_tb_media_filename') ? dca_tb_media_filename($attachment_id) : '',
+        'new_filename' => '',
+        'title' => dca_tb_text($attachment->post_title),
+        'alt' => dca_tb_text(get_post_meta($attachment_id, '_wp_attachment_image_alt', true)),
+        'caption' => dca_tb_text($attachment->post_excerpt),
+        'description' => dca_tb_text($attachment->post_content),
+    ];
+    $json = wp_json_encode($payload, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+
+    if (!is_string($json) || $json === '') {
+        return '';
+    }
+
+    return "MEDIA IMPORT\n" . $json . "\nEINDE MEDIA IMPORT";
 }
 
 function dca_tb_ai_image_context_instruction_block() {
@@ -782,8 +1015,8 @@ function dca_tb_ai_image_context_instruction_block() {
         'Voor puur decoratieve afbeeldingen mag de geadviseerde alt-tekst leeg zijn.',
         'Bij een gedeelde Attachment ID moet metadata bruikbaar blijven voor alle gemelde pagina\'s; maak geen te paginaspecifieke gedeelde metadata.',
         'Maak waar voldoende zeker een SEO-bestandsnaam zonder extensie, alt-tekst, titel, caption en description.',
-        'Wijzig in MEDIA IMPORT uitsluitend Nieuwe bestandsnaam, Title, Alt text, Caption en Description.',
-        'Wijzig nooit Attachment ID of Bestandsnaam. Laat het MEDIA IMPORT- en EINDE MEDIA IMPORT-label staan zodat het bestand veilig kan worden teruggeimporteerd.',
+        'MEDIA IMPORT bevat per afbeelding een enkele JSON-regel. Wijzig uitsluitend de JSON-waarden new_filename, title, alt, caption en description.',
+        'Wijzig nooit schema, attachment_id of filename. Laat de labels MEDIA IMPORT en EINDE MEDIA IMPORT staan zodat het bestand veilig kan worden teruggeimporteerd.',
         'Bij pagina-export blijft ook het normale Content Sync-importblok beschikbaar voor de bestaande pagina-importflow.',
     ]);
 }
@@ -813,7 +1046,7 @@ function dca_tb_ai_image_context_build_export($post_ids) {
     $scan = dca_tb_ai_image_context_site_usage_scan($attachment_ids);
     $sections = [
         'AI AFBEELDINGSCONTEXT EXPORT',
-        'Schema: 3',
+        'Schema: 4',
         'Gegenereerd: ' . current_time('mysql'),
         '',
         dca_tb_ai_image_context_instruction_block(),
@@ -879,7 +1112,7 @@ function dca_tb_ai_image_context_build_media_export($attachment_ids) {
     $scan = dca_tb_ai_image_context_site_usage_scan($attachment_ids);
     $sections = [
         'AI AFBEELDINGSCONTEXT MEDIA-EXPORT',
-        'Schema: 3',
+        'Schema: 4',
         'Gegenereerd: ' . current_time('mysql'),
         '',
         dca_tb_ai_image_context_instruction_block(),
@@ -916,6 +1149,61 @@ function dca_tb_ai_image_context_build_media_export($attachment_ids) {
     return $exported > 0 ? trim(implode("\n", $sections)) : '';
 }
 
+function dca_tb_ai_image_context_parse_legacy_media_import_block($block) {
+    $labels = ['Attachment ID:', 'Bestandsnaam:', 'Nieuwe bestandsnaam:', 'Title:', 'Alt text:', 'Caption:', 'Description:'];
+
+    foreach ($labels as $label) {
+        if (dca_tb_label_marker_count($block, $label) !== 1) {
+            return new WP_Error('dca_ai_media_import_label', 'MEDIA IMPORT is ongeldig: "' . $label . '" ontbreekt of komt meerdere keren voor.');
+        }
+    }
+
+    return [
+        'attachment_id' => absint(dca_tb_label($block, 'Attachment ID:', ['Bestandsnaam:'])),
+        'filename' => dca_tb_label($block, 'Bestandsnaam:', ['Nieuwe bestandsnaam:']),
+        'new_filename' => dca_tb_label($block, 'Nieuwe bestandsnaam:', ['Title:']),
+        'title' => dca_tb_label($block, 'Title:', ['Alt text:']),
+        'alt' => dca_tb_label($block, 'Alt text:', ['Caption:']),
+        'caption' => dca_tb_label($block, 'Caption:', ['Description:']),
+        'description' => dca_tb_label($block, 'Description:'),
+    ];
+}
+
+function dca_tb_ai_image_context_parse_json_media_import_block($block) {
+    $decoded = json_decode(trim((string) $block), true);
+
+    if (!is_array($decoded) || json_last_error() !== JSON_ERROR_NONE) {
+        return new WP_Error('dca_ai_media_import_json', 'MEDIA IMPORT bevat ongeldige JSON. Exporteer het bestand opnieuw en wijzig alleen de toegestane JSON-waarden.');
+    }
+
+    $required = ['schema', 'attachment_id', 'filename', 'new_filename', 'title', 'alt', 'caption', 'description'];
+    foreach ($required as $key) {
+        if (!array_key_exists($key, $decoded)) {
+            return new WP_Error('dca_ai_media_import_json_key', 'MEDIA IMPORT JSON mist het verplichte veld "' . $key . '".');
+        }
+    }
+
+    if (absint($decoded['schema']) !== 2) {
+        return new WP_Error('dca_ai_media_import_json_schema', 'MEDIA IMPORT JSON gebruikt een niet-ondersteunde schema-versie.');
+    }
+
+    foreach (['filename', 'new_filename', 'title', 'alt', 'caption', 'description'] as $key) {
+        if (!is_scalar($decoded[$key]) && $decoded[$key] !== null) {
+            return new WP_Error('dca_ai_media_import_json_value', 'MEDIA IMPORT JSON bevat een ongeldig tekstveld: ' . $key . '.');
+        }
+    }
+
+    return [
+        'attachment_id' => absint($decoded['attachment_id']),
+        'filename' => (string) $decoded['filename'],
+        'new_filename' => (string) $decoded['new_filename'],
+        'title' => (string) $decoded['title'],
+        'alt' => (string) $decoded['alt'],
+        'caption' => (string) $decoded['caption'],
+        'description' => (string) $decoded['description'],
+    ];
+}
+
 function dca_tb_ai_image_context_parse_media_import($text) {
     $text = str_replace(["\r\n", "\r"], "\n", (string) $text);
     preg_match_all('/^MEDIA IMPORT\s*$\n(.*?)^EINDE MEDIA IMPORT\s*$/ims', $text, $matches);
@@ -931,24 +1219,16 @@ function dca_tb_ai_image_context_parse_media_import($text) {
 
     $items = [];
     $seen = [];
-    $labels = ['Attachment ID:', 'Bestandsnaam:', 'Nieuwe bestandsnaam:', 'Title:', 'Alt text:', 'Caption:', 'Description:'];
 
     foreach ($blocks as $block) {
-        foreach ($labels as $label) {
-            if (dca_tb_label_marker_count($block, $label) !== 1) {
-                return new WP_Error('dca_ai_media_import_label', 'MEDIA IMPORT is ongeldig: "' . $label . '" ontbreekt of komt meerdere keren voor.');
-            }
-        }
+        $trimmed = ltrim((string) $block);
+        $item = isset($trimmed[0]) && $trimmed[0] === '{'
+            ? dca_tb_ai_image_context_parse_json_media_import_block($block)
+            : dca_tb_ai_image_context_parse_legacy_media_import_block($block);
 
-        $item = [
-            'attachment_id' => absint(dca_tb_label($block, 'Attachment ID:', ['Bestandsnaam:'])),
-            'filename' => dca_tb_label($block, 'Bestandsnaam:', ['Nieuwe bestandsnaam:']),
-            'new_filename' => dca_tb_label($block, 'Nieuwe bestandsnaam:', ['Title:']),
-            'title' => dca_tb_label($block, 'Title:', ['Alt text:']),
-            'alt' => dca_tb_label($block, 'Alt text:', ['Caption:']),
-            'caption' => dca_tb_label($block, 'Caption:', ['Description:']),
-            'description' => dca_tb_label($block, 'Description:'),
-        ];
+        if (is_wp_error($item)) {
+            return $item;
+        }
 
         $attachment_id = absint($item['attachment_id']);
         if (!$attachment_id) {
@@ -998,6 +1278,30 @@ function dca_tb_ai_image_context_media_import_changes($attachment_id, $item) {
     return $changes;
 }
 
+function dca_tb_ai_image_context_rename_blocker($scan, $attachment_id) {
+    $attachment_id = absint($attachment_id);
+
+    if (empty($scan['complete'])) {
+        return 'Metadata kan worden bijgewerkt, maar bestandsnaam hernoemen is geblokkeerd omdat de WordPress gebruiksscan niet compleet is.';
+    }
+
+    $usage_entries = isset($scan['usage'][$attachment_id]) ? (array) $scan['usage'][$attachment_id] : [];
+    foreach ($usage_entries as $entry) {
+        if (empty($entry['supported'])) {
+            return 'Metadata kan worden bijgewerkt, maar bestandsnaam hernoemen is geblokkeerd omdat de afbeelding ook in een onveilige of niet-ondersteunde opslaglocatie wordt gebruikt.';
+        }
+    }
+
+    foreach ($usage_entries as $entry) {
+        $post_id = absint($entry['post_id'] ?? 0);
+        if ($post_id && !current_user_can('edit_post', $post_id)) {
+            return 'Metadata kan worden bijgewerkt, maar bestandsnaam hernoemen is geblokkeerd omdat je niet alle pagina\'s met deze afbeelding mag wijzigen.';
+        }
+    }
+
+    return '';
+}
+
 function dca_tb_ai_image_context_preview_media_import($text) {
     $items = dca_tb_ai_image_context_parse_media_import($text);
     if (is_wp_error($items)) {
@@ -1041,22 +1345,12 @@ function dca_tb_ai_image_context_preview_media_import($text) {
                     $status = 'error';
                     $message = $prepared->get_error_message();
                 } else {
-                    $usage_entries = isset($scan['usage'][$attachment_id]) ? (array) $scan['usage'][$attachment_id] : [];
-                    $unsupported_usage = false;
-                    foreach ($usage_entries as $entry) {
-                        if (empty($entry['supported'])) {
-                            $unsupported_usage = true;
-                            break;
-                        }
-                    }
-
-                    if (empty($scan['complete']) || $unsupported_usage) {
+                    $blocker = dca_tb_ai_image_context_rename_blocker($scan, $attachment_id);
+                    if ($blocker !== '') {
                         $rename_allowed = false;
                         $rename_blocked++;
                         $status = 'partial';
-                        $message = empty($scan['complete'])
-                            ? 'Metadata kan worden bijgewerkt, maar bestandsnaam hernoemen is geblokkeerd omdat de WordPress gebruiksscan niet compleet is.'
-                            : 'Metadata kan worden bijgewerkt, maar bestandsnaam hernoemen is geblokkeerd omdat de afbeelding ook in een niet-ondersteund contenttype wordt gebruikt.';
+                        $message = $blocker;
                     }
                 }
             }
@@ -1130,16 +1424,26 @@ function dca_tb_ai_image_context_apply_media_import($text) {
         $rename_requested = !empty($row['rename_requested']);
         $rename_allowed = !empty($row['rename_allowed']);
         $write_item = $item;
+        $usage_entries = isset($preview['usage_scan']['usage'][$attachment_id]) ? (array) $preview['usage_scan']['usage'][$attachment_id] : [];
+
+        if ($rename_requested && $rename_allowed) {
+            $blocker = dca_tb_ai_image_context_rename_blocker($preview['usage_scan'], $attachment_id);
+            if ($blocker !== '') {
+                $rename_allowed = false;
+                $result['messages'][] = 'Attachment #' . $attachment_id . ': ' . $blocker;
+            }
+        }
+
         if ($rename_requested && !$rename_allowed) {
             $write_item['new_filename'] = '';
             $result['rename_blocked']++;
         }
 
-        $usage_entries = isset($preview['usage_scan']['usage'][$attachment_id]) ? (array) $preview['usage_scan']['usage'][$attachment_id] : [];
         if ($rename_requested && $rename_allowed && function_exists('dca_tb_add_backup')) {
             foreach ($usage_entries as $entry) {
-                if (!empty($entry['supported']) && !empty($entry['post_id'])) {
-                    dca_tb_add_backup(absint($entry['post_id']), 'ai-media-import');
+                $post_id = absint($entry['post_id'] ?? 0);
+                if (!empty($entry['supported']) && $post_id && current_user_can('edit_post', $post_id)) {
+                    dca_tb_add_backup($post_id, 'ai-media-import');
                 }
             }
         }
@@ -1159,8 +1463,9 @@ function dca_tb_ai_image_context_apply_media_import($text) {
 
         if (!empty($replace_pairs) && $rename_allowed && function_exists('dca_tb_replace_media_urls_on_page')) {
             foreach ($usage_entries as $entry) {
-                if (!empty($entry['supported']) && !empty($entry['post_id'])) {
-                    $result['url_replaces'] += absint(dca_tb_replace_media_urls_on_page(absint($entry['post_id']), $replace_pairs));
+                $post_id = absint($entry['post_id'] ?? 0);
+                if (!empty($entry['supported']) && $post_id && current_user_can('edit_post', $post_id)) {
+                    $result['url_replaces'] += absint(dca_tb_replace_media_urls_on_page($post_id, $replace_pairs));
                 }
             }
         }
