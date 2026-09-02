@@ -68,7 +68,7 @@ manager = replace_once(
 manager = replace_once(
     manager,
     "    return dca_tb_sanitize_post_id_list(wp_unslash($_POST[$key]));\n}\n\nfunction dca_tb_current_user_can_use_manager() {",
-    "    return dca_tb_sanitize_post_id_list(wp_unslash($_POST[$key]));\n}\n// phpcs:enable WordPress.Security.NonceVerification.Missing\n\nfunction dca_tb_current_user_can_use_manager() {",
+    "    // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- The dedicated sanitizer validates every list member with absint().\n    return dca_tb_sanitize_post_id_list(wp_unslash($_POST[$key]));\n}\n// phpcs:enable WordPress.Security.NonceVerification.Missing\n\nfunction dca_tb_current_user_can_use_manager() {",
     "central POST nonce annotation end",
 )
 write("includes/manager.php", manager)
