@@ -39,7 +39,7 @@ Daarna kan hetzelfde TXT-bestand via `AI data importeren` worden gecontroleerd e
 - ACF 6.8.9 voor pagina-, product- en custom-post-typevelden wanneer die via ACF worden beheerd
 - Voor WooCommerce-producten: WordPress 6.9+ en WooCommerce 11.0.1
 
-De releasegate test zowel WordPress 6.2.11/PHP 7.4/ACF 6.8.9 als de gezamenlijk ondersteunde ecosystemcombinatie WordPress 7.0.4/PHP 8.3/ACF 6.8.9/WooCommerce 11.0.1. In beide omgevingen wordt de gebouwde ZIP schoon geïnstalleerd en geforceerd bijgewerkt. Daarna worden export, preview, import, importlog en herstel op echte WordPress-content uitgevoerd; de ecosystemmatrix test daarnaast een WooCommerce-product en de AI-media-export/import met fysieke bestandsnaamwijziging. De AI-media hardeningtest controleert bovendien builder/private metadata, gebruikspagina-rechten, JSON round-trip met delimiterteksten en het weigeren van gecropte previewfallbacks.
+De releasegate bewaakt de laagste gedeclareerde combinatie WordPress 6.2.11/PHP 7.4/ACF 6.8.9, de bestaande WooCommerce-baseline WordPress 7.0.4/PHP 8.3/ACF 6.8.9/WooCommerce 11.0.1 en WordPress 7.1 op PHP 8.3 plus PHP 8.5. De WordPress 7.1/PHP 8.3-lane bevat eveneens WooCommerce 11.0.1. In iedere omgeving wordt de gebouwde ZIP schoon geïnstalleerd en geforceerd bijgewerkt. Daarna worden export, preview, import, importlog en herstel op echte WordPress-content uitgevoerd; de WooCommerce-matrices testen daarnaast een product en de AI-media-export/import met fysieke bestandsnaamwijziging. De AI-media hardeningtest controleert bovendien builder/private metadata, gebruikspagina-rechten, JSON round-trip met delimiterteksten en het weigeren van gecropte previewfallbacks. Plugin Check draait aanvullend in de stabiele WordPress 7.0.4/PHP 8.3-lane, terwijl WPCS/PHPCS en Composer audit in de quality gate draaien.
 
 Bekende testbeperking: WooCommerce 11.0.1 schrijft tijdens de WP-CLI-runtime één `_load_textdomain_just_in_time`-notice voor zijn eigen `woocommerce`-tekstdomein. De gate staat alleen die exact herkenbare upstreammelding toe en faalt bij iedere andere notice, warning, fatal of debugregel. De Content Sync-flows zelf moeten zonder eigen debugmelding slagen.
 
@@ -74,13 +74,13 @@ Zet oude Code Snippets/WPCode-versies of oude pluginvarianten eerst uit voordat 
 
 ## Versie
 
-1.2.62
+1.2.63
 
 ## Releaseproces
 
 1. Laat de quality gate en de geautomatiseerde schone WordPress-runtimegate slagen en test de plugin-ZIP daarna nog op een representatieve staginginstallatie met een back-up.
 2. Controleer dat de versie in de pluginheader, `DCA_TB_VERSION` en de `Stable tag` gelijk is.
-3. Maak pas daarna de bijpassende tag, bijvoorbeeld `v1.2.62`.
+3. Maak pas daarna de bijpassende tag, bijvoorbeeld `v1.2.63`.
 4. De tagworkflow bouwt de ZIP tweemaal, vergelijkt de SHA-256-checksums en maakt een **conceptrelease** met ZIP en checksum.
 5. Publiceer het concept pas nadat export, preview, import en herstel in de ondersteunde WordPress/PHP-matrix zijn gecontroleerd en de Media Bibliotheek-UI op staging handmatig is bekeken.
 
@@ -91,6 +91,13 @@ python scripts/build_release.py
 ```
 
 ## Changelog
+
+### 1.2.63
+
+- Compatibility: WordPress 7.1-runtimecoverage toegevoegd op PHP 8.3 en 8.5 zonder de bestaande minimum- en WooCommerce-baselines te verwijderen.
+- Quality: officiële Plugin Check-validatie, WPCS/PHPCS en Composer dependency-audit toegevoegd aan CI.
+- I18n: de twee admin-JavaScriptbestanden gebruiken `wp-i18n` en `wp_set_script_translations()` voor gebruikersgerichte UI-tekst.
+- Accessibility: bestaande dialog-, live-region- en focuscontracten zijn als regressiegate vastgelegd; browser/screenreader blijft een aparte stagingtest.
 
 ### 1.2.62
 

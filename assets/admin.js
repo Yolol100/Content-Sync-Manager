@@ -1,5 +1,6 @@
 document.addEventListener('DOMContentLoaded', function () {
     const dcaSettings = window.dcaTbSettings || {};
+    const { __, sprintf } = window.wp.i18n;
     const nonce = dcaSettings.nonce;
     const filterUrl = dcaSettings.filterUrl;
     const filterLabel = dcaSettings.filterLabel;
@@ -21,13 +22,13 @@ document.addEventListener('DOMContentLoaded', function () {
         }
 
         const buttonItems = [
-            ['dca-copy-selected', 'Kopieer selectie', 'button'],
-            ['dca-export-selected', 'Export selectie .txt', 'button'],
-            ['dca-open-empty-bulk', 'Bulkeditor', 'button'],
-            ['dca-select-all', 'Selecteer alles', 'button'],
-            ['dca-deselect-selected', 'Deselecteer alles', 'button'],
-            ['dca-open-import', 'Import .txt', 'button button-primary'],
-            ['dca-restore-last-import', 'Herstel laatste import', 'button'],
+            ['dca-copy-selected', __('Kopieer selectie', 'content-sync-manager'), 'button'],
+            ['dca-export-selected', __('Export selectie .txt', 'content-sync-manager'), 'button'],
+            ['dca-open-empty-bulk', __('Bulkeditor', 'content-sync-manager'), 'button'],
+            ['dca-select-all', __('Selecteer alles', 'content-sync-manager'), 'button'],
+            ['dca-deselect-selected', __('Deselecteer alles', 'content-sync-manager'), 'button'],
+            ['dca-open-import', __('Import .txt', 'content-sync-manager'), 'button button-primary'],
+            ['dca-restore-last-import', __('Herstel laatste import', 'content-sync-manager'), 'button'],
         ];
 
         const existing = document.querySelector('.dca-toolbar');
@@ -52,7 +53,7 @@ document.addEventListener('DOMContentLoaded', function () {
             const link = document.createElement('a');
             link.className = 'button dca-toolbar-filter';
             link.href = filterUrl;
-            link.textContent = filterLabel || 'Filter';
+            link.textContent = filterLabel || __('Filter', 'content-sync-manager');
             bar.appendChild(link);
         }
 
@@ -135,7 +136,7 @@ document.addEventListener('DOMContentLoaded', function () {
     ];
 
     if (!nonce || !ajaxUrl || requiredElements.some((element) => !element)) {
-        console.warn('Content Sync Manager: admin UI niet volledig geladen. Herlaad de adminpagina.');
+        console.warn(__('Content Sync Manager: admin UI niet volledig geladen. Herlaad de adminpagina.', 'content-sync-manager'));
         return;
     }
 
@@ -201,7 +202,7 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     function closeSafe(modal, type) {
-        if (dirty(type) && !confirm('Je hebt wijzigingen die nog niet zijn opgeslagen. Toch sluiten?')) {
+        if (dirty(type) && !confirm(__('Je hebt wijzigingen die nog niet zijn opgeslagen. Toch sluiten?', 'content-sync-manager'))) {
             return;
         }
 
@@ -238,7 +239,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 return {
                     success: false,
                     data: {
-                        message: 'Server gaf geen geldige JSON terug. HTTP ' + response.status + '. Eerste response: ' + (preview || 'lege response'),
+                        message: __('Server gaf geen geldige JSON terug. HTTP ', 'content-sync-manager') + response.status + '. Eerste response: ' + (preview || __('lege response', 'content-sync-manager')),
                     },
                 };
             }
@@ -250,17 +251,17 @@ document.addEventListener('DOMContentLoaded', function () {
 
                 return {
                     success: false,
-                    data: { message: 'AJAX-verzoek mislukt. HTTP ' + response.status + '.' },
+                    data: { message: __('AJAX-verzoek mislukt. HTTP ', 'content-sync-manager') + response.status + '.' },
                 };
             }
 
             return parsed || {
                 success: false,
-                data: { message: 'Lege AJAX-response.' },
+                data: { message: __('Lege AJAX-response.', 'content-sync-manager') },
             };
         })).catch((error) => ({
             success: false,
-            data: { message: 'AJAX-verzoek mislukt: ' + (error && error.message ? error.message : String(error)) },
+            data: { message: __('AJAX-verzoek mislukt: ', 'content-sync-manager') + (error && error.message ? error.message : String(error)) },
         }));
     }
 
@@ -289,16 +290,16 @@ document.addEventListener('DOMContentLoaded', function () {
     function copy(text, element) {
         if (navigator.clipboard && navigator.clipboard.writeText) {
             navigator.clipboard.writeText(text).then(() => {
-                status(element, 'Gekopieerd.', 'is-success');
+                status(element, __('Gekopieerd.', 'content-sync-manager'), 'is-success');
             }).catch(() => {
                 const copied = fallbackCopy(text);
-                status(element, copied ? 'Gekopieerd.' : 'Kopiëren mislukt. Selecteer en kopieer handmatig.', copied ? 'is-success' : 'is-error');
+                status(element, copied ? __('Gekopieerd.', 'content-sync-manager') : __('Kopiëren mislukt. Selecteer en kopieer handmatig.', 'content-sync-manager'), copied ? 'is-success' : 'is-error');
             });
             return;
         }
 
         const copied = fallbackCopy(text);
-        status(element, copied ? 'Gekopieerd.' : 'Kopiëren mislukt. Selecteer en kopieer handmatig.', copied ? 'is-success' : 'is-error');
+        status(element, copied ? __('Gekopieerd.', 'content-sync-manager') : __('Kopiëren mislukt. Selecteer en kopieer handmatig.', 'content-sync-manager'), copied ? 'is-success' : 'is-error');
     }
 
     function download(text, name) {
@@ -328,14 +329,14 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     function reloadList(message) {
-        showToast((message || 'Opgeslagen') + '. Lijst wordt bijgewerkt...');
+        showToast((message || __('Opgeslagen', 'content-sync-manager')) + __('. Lijst wordt bijgewerkt...', 'content-sync-manager'));
         setTimeout(() => {
             window.location.href = window.location.href;
         }, 900);
     }
 
     function updateSelectionToast() {
-        showToast('Content Sync: ' + selectedIds().length + ' geselecteerd');
+        showToast(sprintf(__('Content Sync: %d geselecteerd', 'content-sync-manager'), selectedIds().length));
     }
 
     function selectAll() {
@@ -412,7 +413,7 @@ document.addEventListener('DOMContentLoaded', function () {
         const importable = importableItems(items).length;
         const blocked = items.length - importable;
 
-        return importable + ' importeerbaar, ' + blocked + ' geblokkeerd.';
+        return sprintf(__('%1$d importeerbaar, %2$d geblokkeerd.', 'content-sync-manager'), importable, blocked);
     }
 
     function setButtonEnabled(button, enabled) {
@@ -438,7 +439,7 @@ document.addEventListener('DOMContentLoaded', function () {
         if (!Array.isArray(items)) {
             const message = document.createElement('p');
             message.className = 'dca-error';
-            message.textContent = 'Geen geldige preview ontvangen.';
+            message.textContent = __('Geen geldige preview ontvangen.', 'content-sync-manager');
             box.appendChild(message);
             box.style.display = 'block';
             return;
@@ -449,7 +450,7 @@ document.addEventListener('DOMContentLoaded', function () {
         if (summary) {
             const paragraph = document.createElement('p');
             const strong = document.createElement('strong');
-            strong.textContent = 'Controle:';
+            strong.textContent = __('Controle:', 'content-sync-manager');
             paragraph.appendChild(strong);
             paragraph.appendChild(document.createTextNode(' ' + summary));
             box.appendChild(paragraph);
@@ -458,9 +459,9 @@ document.addEventListener('DOMContentLoaded', function () {
         const table = document.createElement('table');
         const thead = document.createElement('thead');
         const headerRow = document.createElement('tr');
-        appendHeaderCell(headerRow, 'Bron');
-        appendHeaderCell(headerRow, 'Gekoppelde pagina');
-        appendHeaderCell(headerRow, 'Status');
+        appendHeaderCell(headerRow, __('Bron', 'content-sync-manager'));
+        appendHeaderCell(headerRow, __('Gekoppelde pagina', 'content-sync-manager'));
+        appendHeaderCell(headerRow, __('Status', 'content-sync-manager'));
         thead.appendChild(headerRow);
         table.appendChild(thead);
 
@@ -475,15 +476,15 @@ document.addEventListener('DOMContentLoaded', function () {
             const statusCell = document.createElement('td');
             const statusClass = rowItem.status === 'success' ? 'dca-ok' : (rowItem.status === 'partial' ? 'dca-partial' : 'dca-error');
             const targetId = rowItem.target_id || rowItem.target_post_id || 0;
-            const target = rowItem.target_title ? rowItem.target_title + ' (#' + targetId + ')' : 'Niet gevonden';
+            const target = rowItem.target_title ? sprintf(__('%1$s (#%2$d)', 'content-sync-manager'), rowItem.target_title, targetId) : __('Niet gevonden', 'content-sync-manager');
 
-            sourceTitle.textContent = rowItem.source_title || 'Onbekend item';
+            sourceTitle.textContent = rowItem.source_title || __('Onbekend item', 'content-sync-manager');
             sourceCell.appendChild(sourceTitle);
             sourceCell.appendChild(document.createElement('br'));
-            sourceCell.appendChild(document.createTextNode('ID: ' + (rowItem.source_id || '')));
+            sourceCell.appendChild(document.createTextNode(sprintf(__('ID: %s', 'content-sync-manager'), rowItem.source_id || '')));
             targetCell.textContent = target;
             statusCell.className = statusClass;
-            statusCell.textContent = rowItem.message || 'Geen melding ontvangen.';
+            statusCell.textContent = rowItem.message || __('Geen melding ontvangen.', 'content-sync-manager');
 
             row.appendChild(sourceCell);
             row.appendChild(targetCell);
@@ -550,36 +551,36 @@ document.addEventListener('DOMContentLoaded', function () {
             return;
         }
 
-        singleTitle.textContent = 'Content ophalen';
-        singleOut.value = 'Tekst wordt opgehaald...';
+        singleTitle.textContent = __('Content ophalen', 'content-sync-manager');
+        singleOut.value = __('Tekst wordt opgehaald...', 'content-sync-manager');
         singleInitial = singleOut.value;
         open(singleModal);
 
         ajax('dca_get_acf_textblock', currentObjectPayload()).then((response) => {
             if (!response || !response.success) {
-                singleOut.value = response && response.data && response.data.message ? response.data.message : 'Er ging iets mis.';
+                singleOut.value = response && response.data && response.data.message ? response.data.message : __('Er ging iets mis.', 'content-sync-manager');
                 return;
             }
 
             cache[cacheKey] = response.data;
             fill(response.data);
         }).catch(() => {
-            singleOut.value = 'Er ging iets mis.';
+            singleOut.value = __('Er ging iets mis.', 'content-sync-manager');
         });
     }));
 
     singleSave.addEventListener('click', function () {
         if (!currentObject) {
-            status(singleStatus, 'Geen item geselecteerd.', 'is-error');
+            status(singleStatus, __('Geen item geselecteerd.', 'content-sync-manager'), 'is-error');
             return;
         }
 
-        if (!confirm('Weet je zeker dat je dit contentblok wilt opslaan? Er wordt automatisch eerst een back-up gemaakt.')) {
+        if (!confirm(__('Weet je zeker dat je dit contentblok wilt opslaan? Er wordt automatisch eerst een back-up gemaakt.', 'content-sync-manager'))) {
             return;
         }
 
         this.disabled = true;
-        status(singleStatus, 'Back-up maken en opslaan...', '');
+        status(singleStatus, __('Back-up maken en opslaan...', 'content-sync-manager'), '');
 
         ajax('dca_save_acf_textblock', Object.assign(currentObjectPayload(), {
             textblock: singleOut.value,
@@ -588,7 +589,7 @@ document.addEventListener('DOMContentLoaded', function () {
             this.disabled = false;
 
             if (!response || !response.success) {
-                status(singleStatus, response && response.data && response.data.message ? response.data.message : 'Opslaan mislukt.', 'is-error');
+                status(singleStatus, response && response.data && response.data.message ? response.data.message : __('Opslaan mislukt.', 'content-sync-manager'), 'is-error');
                 return;
             }
 
@@ -598,11 +599,11 @@ document.addEventListener('DOMContentLoaded', function () {
                 text: singleOut.value,
                 view_url: singleView.href,
             };
-            status(singleStatus, response.data.message || 'Opgeslagen.', 'is-success');
-            reloadList(currentObject.type === 'term' ? 'Categorie opgeslagen' : 'Pagina opgeslagen');
+            status(singleStatus, response.data.message || __('Opgeslagen.', 'content-sync-manager'), 'is-success');
+            reloadList(currentObject.type === 'term' ? __('Categorie opgeslagen', 'content-sync-manager') : __('Pagina opgeslagen', 'content-sync-manager'));
         }).catch(() => {
             this.disabled = false;
-            status(singleStatus, 'Opslaan mislukt.', 'is-error');
+            status(singleStatus, __('Opslaan mislukt.', 'content-sync-manager'), 'is-error');
         });
     });
 
@@ -614,7 +615,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
     singleDownload.addEventListener('click', () => {
         download(singleOut.value, singleFilename);
-        status(singleStatus, 'TXT-bestand gedownload.', 'is-success');
+        status(singleStatus, __('TXT-bestand gedownload.', 'content-sync-manager'), 'is-success');
     });
 
     singleClose.addEventListener('click', () => closeSafe(singleModal, 'single'));
@@ -623,12 +624,12 @@ document.addEventListener('DOMContentLoaded', function () {
         const ids = selectedIds();
 
         if (!ids.length) {
-            showToast('Content Sync: 0 geselecteerd');
-            alert('Selecteer eerst één of meerdere items.');
+            showToast(__('Content Sync: 0 geselecteerd', 'content-sync-manager'));
+            alert(__('Selecteer eerst één of meerdere items.', 'content-sync-manager'));
             return Promise.reject();
         }
 
-        if (ids.length > 50 && !confirm('Je hebt ' + ids.length + ' items geselecteerd. Dit kan zwaar zijn voor de server. Toch doorgaan?')) {
+        if (ids.length > 50 && !confirm(sprintf(__('Je hebt %d items geselecteerd. Dit kan zwaar zijn voor de server. Toch doorgaan?', 'content-sync-manager'), ids.length))) {
             return Promise.reject();
         }
 
@@ -661,19 +662,19 @@ document.addEventListener('DOMContentLoaded', function () {
         bulkFilename = 'content-sync-handmatig.txt';
         resetBulkCheck();
 
-        if (draft && confirm('Er staat nog een lokaal concept van de bulkeditor. Wil je dit herstellen?')) {
+        if (draft && confirm(__('Er staat nog een lokaal concept van de bulkeditor. Wil je dit herstellen?', 'content-sync-manager'))) {
             bulkOut.value = draft;
             bulkInitial = draft;
         }
 
-        status(bulkStatus, 'Plak hier je bulktekst en klik daarna op “Controleer bulktekst”.', '');
+        status(bulkStatus, __('Plak hier je bulktekst en klik daarna op “Controleer bulktekst”.', 'content-sync-manager'), '');
         open(bulkModal);
         bulkOut.focus();
-        showToast('Bulkeditor geopend. Plak je tekst en controleer vóór opslaan.');
+        showToast(__('Bulkeditor geopend. Plak je tekst en controleer vóór opslaan.', 'content-sync-manager'));
     });
 
     toolbarCopy.addEventListener('click', function () {
-        bulkOut.value = 'Contentblokken worden opgehaald...';
+        bulkOut.value = __('Contentblokken worden opgehaald...', 'content-sync-manager');
         bulkInitial = bulkOut.value;
         resetBulkCheck();
         status(bulkStatus, '', '');
@@ -681,8 +682,8 @@ document.addEventListener('DOMContentLoaded', function () {
 
         fetchBulk().then((response) => {
             if (!response || !response.success) {
-                bulkOut.value = response && response.data && response.data.message ? response.data.message : 'Ophalen mislukt.';
-                status(bulkStatus, 'Ophalen mislukt.', 'is-error');
+                bulkOut.value = response && response.data && response.data.message ? response.data.message : __('Ophalen mislukt.', 'content-sync-manager');
+                status(bulkStatus, __('Ophalen mislukt.', 'content-sync-manager'), 'is-error');
                 return;
             }
 
@@ -698,7 +699,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
     toolbarExport.addEventListener('click', () => fetchBulk().then((response) => {
         if (!response || !response.success) {
-            alert(response && response.data && response.data.message ? response.data.message : 'Exporteren mislukt.');
+            alert(response && response.data && response.data.message ? response.data.message : __('Exporteren mislukt.', 'content-sync-manager'));
             return;
         }
 
@@ -707,11 +708,11 @@ document.addEventListener('DOMContentLoaded', function () {
 
     bulkCheck.addEventListener('click', function () {
         if (!bulkOut.value.trim()) {
-            status(bulkStatus, 'Er staat geen tekst om te controleren.', 'is-error');
+            status(bulkStatus, __('Er staat geen tekst om te controleren.', 'content-sync-manager'), 'is-error');
             return;
         }
 
-        status(bulkStatus, 'Controleren...', '');
+        status(bulkStatus, __('Controleren...', 'content-sync-manager'), '');
         setButtonEnabled(bulkSave, false);
         bulkChecked = false;
         bulkPreviewHash = '';
@@ -720,7 +721,7 @@ document.addEventListener('DOMContentLoaded', function () {
             if (!response || !response.success) {
                 bulkPreview.style.display = 'none';
                 clearElement(bulkPreview);
-                status(bulkStatus, response && response.data && response.data.message ? response.data.message : 'Controle mislukt.', 'is-error');
+                status(bulkStatus, response && response.data && response.data.message ? response.data.message : __('Controle mislukt.', 'content-sync-manager'), 'is-error');
                 return;
             }
 
@@ -729,7 +730,7 @@ document.addEventListener('DOMContentLoaded', function () {
             renderPreview(bulkPreview, items);
 
             if (!items.length) {
-                status(bulkStatus, 'Controle gaf geen items terug. Opslaan is geblokkeerd.', 'is-error');
+                status(bulkStatus, __('Controle gaf geen items terug. Opslaan is geblokkeerd.', 'content-sync-manager'), 'is-error');
                 return;
             }
 
@@ -744,21 +745,21 @@ document.addEventListener('DOMContentLoaded', function () {
             }
 
             status(bulkStatus, 'Controle geslaagd. ' + previewSummary(items) + ' Klaar om bulk op te slaan.', 'is-success');
-        }).catch(() => status(bulkStatus, 'Controle mislukt.', 'is-error'));
+        }).catch(() => status(bulkStatus, __('Controle mislukt.', 'content-sync-manager'), 'is-error'));
     });
 
     bulkSave.addEventListener('click', function () {
         if (!bulkChecked || !bulkPreviewHash) {
-            status(bulkStatus, 'Controleer eerst exact deze bulktekst opnieuw.', 'is-error');
+            status(bulkStatus, __('Controleer eerst exact deze bulktekst opnieuw.', 'content-sync-manager'), 'is-error');
             return;
         }
 
-        if (!confirm('Weet je zeker dat je deze gecontroleerde bulk-tekst wilt opslaan? Geldige items kunnen bestaande content, ACF-, SEO-, categorie- en media-data wijzigen. Items met fouten worden overgeslagen. Per geïmporteerd item wordt automatisch eerst een back-up gemaakt.')) {
+        if (!confirm(__('Weet je zeker dat je deze gecontroleerde bulk-tekst wilt opslaan? Geldige items kunnen bestaande content, ACF-, SEO-, categorie- en media-data wijzigen. Items met fouten worden overgeslagen. Per geïmporteerd item wordt automatisch eerst een back-up gemaakt.', 'content-sync-manager'))) {
             return;
         }
 
         this.disabled = true;
-        status(bulkStatus, 'Back-ups maken en bulk opslaan...', '');
+        status(bulkStatus, __('Back-ups maken en bulk opslaan...', 'content-sync-manager'), '');
 
         ajax('dca_txt_import_run', {
             txt_content: bulkOut.value,
@@ -768,7 +769,7 @@ document.addEventListener('DOMContentLoaded', function () {
             this.disabled = false;
 
             if (!response || !response.success) {
-                status(bulkStatus, response && response.data && response.data.message ? response.data.message : 'Bulk opslaan mislukt.', 'is-error');
+                status(bulkStatus, response && response.data && response.data.message ? response.data.message : __('Bulk opslaan mislukt.', 'content-sync-manager'), 'is-error');
                 return;
             }
 
@@ -778,11 +779,11 @@ document.addEventListener('DOMContentLoaded', function () {
 
             bulkInitial = bulkOut.value;
             clearBulkDraft();
-            status(bulkStatus, response.data.message || 'Bulk opgeslagen.', 'is-success');
-            reloadList('Bulk opgeslagen');
+            status(bulkStatus, response.data.message || __('Bulk opgeslagen.', 'content-sync-manager'), 'is-success');
+            reloadList(__('Bulk opgeslagen', 'content-sync-manager'));
         }).catch(() => {
             this.disabled = false;
-            status(bulkStatus, 'Bulk opslaan mislukt.', 'is-error');
+            status(bulkStatus, __('Bulk opslaan mislukt.', 'content-sync-manager'), 'is-error');
         });
     });
 
@@ -794,7 +795,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
     bulkDownload.addEventListener('click', () => {
         download(bulkOut.value, bulkFilename);
-        status(bulkStatus, 'TXT-bestand gedownload.', 'is-success');
+        status(bulkStatus, __('TXT-bestand gedownload.', 'content-sync-manager'), 'is-success');
     });
 
     bulkClose.addEventListener('click', () => closeSafe(bulkModal, 'bulk'));
@@ -812,25 +813,25 @@ document.addEventListener('DOMContentLoaded', function () {
     });
 
     toolbarRestore.addEventListener('click', function () {
-        if (!confirm('Weet je zeker dat je de laatste import wilt terugzetten vanuit de automatische pagina-back-ups? Gebruik dit alleen direct na een foutieve import.')) {
+        if (!confirm(__('Weet je zeker dat je de laatste import wilt terugzetten vanuit de automatische pagina-back-ups? Gebruik dit alleen direct na een foutieve import.', 'content-sync-manager'))) {
             return;
         }
 
         this.disabled = true;
-        showToast('Laatste import wordt hersteld...');
+        showToast(__('Laatste import wordt hersteld...', 'content-sync-manager'));
 
         ajax('dca_restore_last_import_pages', { destructive_confirm: '1' }).then((response) => {
             this.disabled = false;
 
             if (!response || !response.success) {
-                showToast(response && response.data && response.data.message ? response.data.message : 'Herstellen mislukt.');
+                showToast(response && response.data && response.data.message ? response.data.message : __('Herstellen mislukt.', 'content-sync-manager'));
                 return;
             }
 
-            reloadList(response.data && response.data.message ? response.data.message : 'Laatste import hersteld');
+            reloadList(response.data && response.data.message ? response.data.message : __('Laatste import hersteld', 'content-sync-manager'));
         }).catch(() => {
             this.disabled = false;
-            showToast('Herstellen mislukt.');
+            showToast(__('Herstellen mislukt.', 'content-sync-manager'));
         });
     });
 
@@ -841,23 +842,23 @@ document.addEventListener('DOMContentLoaded', function () {
             const file = importFile.files && importFile.files[0];
 
             if (!file) {
-                reject('Kies eerst een TXT-bestand.');
+                reject(__('Kies eerst een TXT-bestand.', 'content-sync-manager'));
                 return;
             }
 
             if (!file.name.toLowerCase().endsWith('.txt')) {
-                reject('Kies een geldig .txt-bestand.');
+                reject(__('Kies een geldig .txt-bestand.', 'content-sync-manager'));
                 return;
             }
 
             if (dcaSettings.maxImportBytes && file.size > Number(dcaSettings.maxImportBytes)) {
-                reject('Bestand is te groot. Maximaal toegestaan: ' + Math.round(Number(dcaSettings.maxImportBytes) / 1024 / 1024) + ' MB.');
+                reject(sprintf(__('Bestand is te groot. Maximaal toegestaan: %d MB.', 'content-sync-manager'), Math.round(Number(dcaSettings.maxImportBytes) / 1024 / 1024)));
                 return;
             }
 
             const reader = new FileReader();
             reader.onload = () => resolve(String(reader.result || ''));
-            reader.onerror = () => reject('Bestand kon niet gelezen worden.');
+            reader.onerror = () => reject(__('Bestand kon niet gelezen worden.', 'content-sync-manager'));
             reader.readAsText(file);
         });
     }
@@ -869,17 +870,17 @@ document.addEventListener('DOMContentLoaded', function () {
         clearElement(importPreviewBox);
         importPreviewBox.style.display = 'none';
         setButtonEnabled(importRun, false);
-        status(importStatus, 'Bestand lezen...', '');
+        status(importStatus, __('Bestand lezen...', 'content-sync-manager'), '');
 
         readFile().then((txt) => {
             importTxt = txt;
-            status(importStatus, 'Bestand controleren...', '');
+            status(importStatus, __('Bestand controleren...', 'content-sync-manager'), '');
             return ajax('dca_txt_import_preview', { txt_content: txt });
         }).then((response) => {
             if (!response || !response.success) {
                 importPreviewBox.style.display = 'none';
                 clearElement(importPreviewBox);
-                status(importStatus, response && response.data && response.data.message ? response.data.message : 'Controle mislukt.', 'is-error');
+                status(importStatus, response && response.data && response.data.message ? response.data.message : __('Controle mislukt.', 'content-sync-manager'), 'is-error');
                 return;
             }
 
@@ -888,7 +889,7 @@ document.addEventListener('DOMContentLoaded', function () {
             renderPreview(importPreviewBox, items);
 
             if (!items.length) {
-                status(importStatus, 'Controle gaf geen items terug. Importeren is geblokkeerd.', 'is-error');
+                status(importStatus, __('Controle gaf geen items terug. Importeren is geblokkeerd.', 'content-sync-manager'), 'is-error');
                 return;
             }
 
@@ -903,21 +904,21 @@ document.addEventListener('DOMContentLoaded', function () {
             }
 
             status(importStatus, 'Controle geslaagd. ' + previewSummary(items) + ' Klaar om te importeren.', 'is-success');
-        }).catch((message) => status(importStatus, message || 'Bestand kon niet gelezen worden.', 'is-error'));
+        }).catch((message) => status(importStatus, message || __('Bestand kon niet gelezen worden.', 'content-sync-manager'), 'is-error'));
     });
 
     importRun.addEventListener('click', function () {
         if (!importOk || !importTxt || !importPreviewHash) {
-            status(importStatus, 'Controleer eerst exact dit bestand opnieuw.', 'is-error');
+            status(importStatus, __('Controleer eerst exact dit bestand opnieuw.', 'content-sync-manager'), 'is-error');
             return;
         }
 
-        if (!confirm('Weet je zeker dat je dit gecontroleerde TXT-bestand wilt importeren? Geldige items kunnen bestaande content, ACF-, SEO-, categorie- en media-data wijzigen. Items met fouten worden overgeslagen. Per geïmporteerd item wordt automatisch eerst een back-up gemaakt.')) {
+        if (!confirm(__('Weet je zeker dat je dit gecontroleerde TXT-bestand wilt importeren? Geldige items kunnen bestaande content, ACF-, SEO-, categorie- en media-data wijzigen. Items met fouten worden overgeslagen. Per geïmporteerd item wordt automatisch eerst een back-up gemaakt.', 'content-sync-manager'))) {
             return;
         }
 
         this.disabled = true;
-        status(importStatus, 'Back-ups maken en importeren...', '');
+        status(importStatus, __('Back-ups maken en importeren...', 'content-sync-manager'), '');
 
         ajax('dca_txt_import_run', {
             txt_content: importTxt,
@@ -925,7 +926,7 @@ document.addEventListener('DOMContentLoaded', function () {
             destructive_confirm: '1',
         }).then((response) => {
             if (!response || !response.success) {
-                status(importStatus, response && response.data && response.data.message ? response.data.message : 'Import mislukt.', 'is-error');
+                status(importStatus, response && response.data && response.data.message ? response.data.message : __('Import mislukt.', 'content-sync-manager'), 'is-error');
                 this.disabled = false;
                 return;
             }
@@ -934,10 +935,10 @@ document.addEventListener('DOMContentLoaded', function () {
                 renderPreview(importPreviewBox, response.data.items);
             }
 
-            status(importStatus, response.data.message || 'Import voltooid.', 'is-success');
-            reloadList('Import voltooid');
+            status(importStatus, response.data.message || __('Import voltooid.', 'content-sync-manager'), 'is-success');
+            reloadList(__('Import voltooid', 'content-sync-manager'));
         }).catch(() => {
-            status(importStatus, 'Import mislukt.', 'is-error');
+            status(importStatus, __('Import mislukt.', 'content-sync-manager'), 'is-error');
             this.disabled = false;
         });
     });

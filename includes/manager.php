@@ -111,6 +111,7 @@ function dca_tb_is_supported_taxonomy($taxonomy) {
     return in_array(sanitize_key((string) $taxonomy), dca_tb_supported_taxonomies(), true);
 }
 
+// phpcs:disable WordPress.Security.NonceVerification.Recommended -- Read-only admin screen routing; these values do not mutate state.
 function dca_tb_get_admin_taxonomy() {
     if (!empty($_GET['taxonomy'])) {
         return sanitize_key(wp_unslash($_GET['taxonomy']));
@@ -132,6 +133,7 @@ function dca_tb_get_admin_post_type() {
 
     return 'post';
 }
+// phpcs:enable WordPress.Security.NonceVerification.Recommended
 
 function dca_tb_post_type_label_single($post_id) {
     $post_type = get_post_type($post_id);
@@ -318,6 +320,7 @@ function dca_tb_today_start_timestamp() {
     return strtotime(date('Y-m-d 00:00:00', $now_local));
 }
 
+// phpcs:disable WordPress.Security.NonceVerification.Recommended -- Read-only list filters; no state-changing action is performed.
 function dca_tb_get_list_status_filter() {
     $status = isset($_GET['dca_tb_status']) ? sanitize_key(wp_unslash($_GET['dca_tb_status'])) : '';
 
@@ -334,6 +337,7 @@ function dca_tb_get_list_template_filter() {
 
     return in_array($template, ['standard'], true) ? $template : '';
 }
+// phpcs:enable WordPress.Security.NonceVerification.Recommended
 
 function dca_tb_apply_standard_template_filter_where($where, $query) {
     if (!is_admin() || !$query->is_main_query() || !$query->get('dca_tb_standard_template_filter')) {
@@ -469,8 +473,8 @@ function dca_tb_render_textblock_column($column, $post_id) {
         '<button type="button" class="button button-small dca-open-acf-textblock" data-post-id="%d">%s</button><br>%s<br>%s',
         absint($post_id),
         esc_html__('Tekst bewerken', 'content-sync-manager'),
-        dca_tb_update_badge($post_id),
-        dca_tb_content_badge($post_id)
+        wp_kses_post(dca_tb_update_badge($post_id)),
+        wp_kses_post(dca_tb_content_badge($post_id))
     );
 }
 
@@ -3910,6 +3914,7 @@ function dca_tb_get_request_object_type() {
     return $object_type === 'term' ? 'term' : 'post';
 }
 
+// phpcs:disable WordPress.Security.NonceVerification.Missing -- Central POST accessors are consumed by AJAX handlers after dca_tb_require_ajax_access().
 function dca_tb_post_int($key) {
     if (!isset($_POST[$key]) || is_array($_POST[$key])) {
         return 0;
@@ -3923,6 +3928,7 @@ function dca_tb_post_text($key) {
         return '';
     }
 
+    // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- Full TXT/request text is intentionally unslashed here and sanitized/validated by the schema-specific caller.
     return (string) wp_unslash($_POST[$key]);
 }
 
@@ -3931,8 +3937,10 @@ function dca_tb_post_id_list($key) {
         return [];
     }
 
+    // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- The dedicated sanitizer validates every list member with absint().
     return dca_tb_sanitize_post_id_list(wp_unslash($_POST[$key]));
 }
+// phpcs:enable WordPress.Security.NonceVerification.Missing
 
 function dca_tb_current_user_can_use_manager() {
     $capability = apply_filters('dca_tb_manager_capability', 'manage_options');
@@ -4314,10 +4322,12 @@ function dca_tb_enqueue_admin_assets($hook_suffix) {
     wp_enqueue_script(
         'dca-tb-admin',
         DCA_TB_PLUGIN_URL . 'assets/admin.js',
-        [],
+        ['wp-i18n'],
         DCA_TB_VERSION,
         true
     );
+
+    wp_set_script_translations('dca-tb-admin', 'content-sync-manager');
 
     wp_add_inline_script(
         'dca-tb-admin',

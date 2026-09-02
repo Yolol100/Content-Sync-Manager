@@ -33,6 +33,9 @@ $manager = $read('includes/manager.php');
 $adminJs = $read('assets/admin.js');
 $readme = $read('readme.txt');
 $readmeMd = $read('README.md');
+$composerJson = $read('composer.json');
+$read('composer.lock');
+$phpcsConfig = $read('phpcs.xml.dist');
 $workflow = $read('.github/workflows/quality.yml');
 $runtimeWorkflow = $read('.github/workflows/runtime-release-gate.yml');
 $releaseWorkflow = $read('.github/workflows/release.yml');
@@ -73,7 +76,7 @@ $assert(strpos($adminJs, "new Blob([text], { type: 'text/plain;charset=utf-8' })
 $assert(strpos($adminJs, 'input[type="checkbox"][name="delete_tags[]"]') !== false, 'Term selection checkbox support is missing.');
 $assert(strpos($adminJs, 'input[type="checkbox"][name="post[]"]') !== false, 'Post/page selection checkbox support is missing.');
 $assert(strpos($adminJs, 'tbody th.check-column input[type="checkbox"]') === false, 'Selection must not depend on a th.check-column wrapper.');
-$assert(strpos($adminJs, "['dca-select-all', 'Selecteer alles', 'button']") !== false, 'Select-all toolbar action is missing.');
+$assert(strpos($adminJs, "['dca-select-all', __('Selecteer alles', 'content-sync-manager'), 'button']") !== false, 'Select-all toolbar action is missing or is not localized.');
 $assert(strpos($adminJs, 'function selectAll()') !== false, 'Select-all implementation is missing.');
 $assert(strpos($adminJs, "toolbarSelectAll.addEventListener('click'") !== false, 'Select-all click handler is missing.');
 $assert(strpos($adminJs, 'checkbox.checked = true;') !== false, 'Select-all action must actually select list rows.');
@@ -89,13 +92,23 @@ $assert(preg_match('/uses:\s*shivammathur\/setup-php@[0-9a-f]{40}/', $runtimeWor
 $assert(strpos($runtimeWorkflow, 'permissions:') !== false && strpos($runtimeWorkflow, 'contents: read') !== false, 'Runtime workflow must keep read-only repository permissions.');
 $assert(strpos($runtimeWorkflow, 'timeout-minutes: 20') !== false, 'Runtime job must have a bounded timeout.');
 $assert(strpos($runtimeWorkflow, 'ce34ddd838f7351d6759068d09793f26755463b4a4610a5a5c0a97b68220d85c') !== false, 'WP-CLI download must retain its verified SHA-256.');
-$assert(strpos($runtimeWorkflow, 'WordPress 6.2.11') !== false && strpos($runtimeWorkflow, 'WordPress 7.0.4') !== false, 'Runtime workflow must cover the minimum and supported ecosystem WordPress matrices.');
+$assert(strpos($runtimeWorkflow, 'WordPress 6.2.11') !== false && strpos($runtimeWorkflow, 'WordPress 7.0.4') !== false && strpos($runtimeWorkflow, 'WordPress 7.1 - PHP 8.3') !== false && strpos($runtimeWorkflow, 'WordPress 7.1 - PHP 8.5') !== false, 'Runtime workflow must cover the minimum, existing ecosystem and WordPress 7.1 matrices.');
+$assert(strpos($runtimeWorkflow, '--version=2.1.0') !== false && strpos($runtimeWorkflow, 'plugin check content-sync-manager') !== false, 'Official Plugin Check gate is missing or unpinned.');
+$assert(strpos($workflow, 'wordpress-best-practices:') !== false && strpos($workflow, 'composer audit --locked') !== false && strpos($workflow, 'vendor/bin/phpcs --standard=phpcs.xml.dist') !== false, 'WPCS/Composer best-practice gate is missing.');
+$assert(strpos($composerJson, '"wp-coding-standards/wpcs": "3.4.1"') !== false && strpos($composerJson, '"dealerdirect/phpcodesniffer-composer-installer": "1.2.1"') !== false, 'WPCS tooling versions are not pinned to the audited versions.');
+$assert(strpos($phpcsConfig, 'WordPress.Security.NonceVerification') !== false && strpos($phpcsConfig, 'WordPress.Security.EscapeOutput') !== false, 'Release-critical WPCS rules are missing.');
+$assert(strpos($manager, "['wp-i18n']") !== false && strpos($manager, "wp_set_script_translations('dca-tb-admin', 'content-sync-manager')") !== false, 'Admin JavaScript must load through WordPress i18n.');
+$assert(strpos($adminJs, 'window.wp.i18n') !== false && strpos($adminJs, "__('Kopieer selectie', 'content-sync-manager')") !== false, 'Admin JavaScript user-facing strings must use wp-i18n.');
+$assert(strpos($manager, 'role="dialog"') !== false && strpos($manager, 'aria-live="polite"') !== false && strpos($adminJs, "event.key === 'Tab'") !== false && strpos($adminJs, 'lastFocusedBeforeModal.focus()') !== false, 'Dialog semantics, live status and keyboard focus regression contract is incomplete.');
 $assert(strpos($runtimeWorkflow, 'scripts/check_runtime_debug_log.py') !== false, 'Runtime workflow must reject unexpected WordPress debug output.');
 $assert(
     strpos($debugLogCheck, '"<code>woocommerce</code>"') !== false
     && strpos($debugLogCheck, '"triggered too early"') !== false
-    && strpos($debugLogCheck, 'len(allowed) > 1') !== false,
-    'Debug-log allowlist must remain limited to one documented WooCommerce CLI notice.'
+    && strpos($debugLogCheck, 'len(allowed_woocommerce) > 1') !== false
+    && strpos($debugLogCheck, '"Using null as an array offset is deprecated, use an empty string instead"') !== false
+    && strpos($debugLogCheck, '"wp-cli.phar/vendor/wp-cli/php-cli-tools/lib/cli/Colors.php on line 95"') !== false
+    && strpos($debugLogCheck, 'unexpected.append(line)') !== false,
+    'Debug-log allowlist must stay fail-closed and limited to the documented WooCommerce notice plus the exact WP-CLI 2.12.0 PHP 8.5 deprecation.'
 );
 $assert(strpos($releaseWorkflow, 'needs: runtime-gate') !== false, 'Draft releases must wait for the clean runtime gate.');
 $assert(preg_match('/^\/dist\/$/m', $gitignore) === 1, 'Generated release artifacts must remain ignored under dist/.');

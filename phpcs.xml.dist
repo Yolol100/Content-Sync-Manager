@@ -1,0 +1,18 @@
+<?xml version="1.0"?>
+<ruleset name="Content Sync Manager">
+    <description>Release-critical WordPress security and API coding-standard checks.</description>
+    <file>content-sync-manager.php</file>
+    <file>uninstall.php</file>
+    <file>includes</file>
+    <arg name="extensions" value="php"/>
+    <arg name="colors"/>
+    <arg value="sp"/>
+
+    <rule ref="WordPress.Security.NonceVerification"/>
+    <rule ref="WordPress.Security.ValidatedSanitizedInput"/>
+    <rule ref="WordPress.Security.EscapeOutput"/>
+    <rule ref="WordPress.DB.PreparedSQL"/>
+    <rule ref="WordPress.WP.Capabilities"/>
+    <rule ref="WordPress.WP.EnqueuedResources"/>
+    <rule ref="WordPress.NamingConventions.PrefixAllGlobals"/>
+</ruleset>

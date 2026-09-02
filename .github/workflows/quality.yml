@@ -74,3 +74,34 @@ jobs:
           test "$first_checksum" = "$second_checksum"
           php tests/static-audit.php
           php tests/ai-image-context-static.php
+
+  wordpress-best-practices:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240 # 2.37.2
+        with:
+          php-version: '8.3'
+          coverage: none
+          tools: composer:v2
+
+      - name: Validate locked tooling
+        shell: bash
+        run: |
+          set -euo pipefail
+          composer validate --strict --no-interaction
+          composer install --no-interaction --prefer-dist --no-progress
+          composer audit --locked --format=json
+
+      - name: WordPress Coding Standards
+        shell: bash
+        run: |
+          set -euo pipefail
+          vendor/bin/phpcs --standard=phpcs.xml.dist
