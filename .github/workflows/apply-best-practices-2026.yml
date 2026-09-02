@@ -28,11 +28,12 @@ jobs:
           coverage: none
           tools: composer:v2
 
-      - name: Apply audited patch
+      - name: Apply audited patches
         shell: bash
         run: |
           set -euo pipefail
           python scripts/apply_best_practices_2026.py
+          python scripts/apply_best_practice_followups.py
           composer update --no-interaction --prefer-dist --no-progress
           composer validate --strict --no-interaction
           composer audit --locked --format=json
@@ -51,18 +52,20 @@ jobs:
           php tests/ai-image-context-static.php
           mv "$RUNNER_TEMP/content-sync-vendor" vendor
 
-      - name: Show WPCS findings before commit
+      - name: WordPress Coding Standards preflight
         shell: bash
         run: |
-          vendor/bin/phpcs --standard=phpcs.xml.dist || true
+          set -euo pipefail
+          vendor/bin/phpcs --standard=phpcs.xml.dist
 
-      - name: Commit generated hardening
+      - name: Commit generated source hardening
         shell: bash
         run: |
           set -euo pipefail
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add -A
+          git reset -- .github/workflows/quality.yml .github/workflows/runtime-release-gate.yml
           git diff --cached --quiet && exit 0
           git commit -m 'Harden plugin for 2026 WordPress best practices'
           git push origin HEAD:chore/2026-best-practices
