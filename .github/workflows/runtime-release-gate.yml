@@ -111,6 +111,12 @@ jobs:
               --activate
           fi
 
+      - name: Reset upstream setup debug log
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -f runtime-site/wp-content/debug.log
+
       - name: Install and update release ZIP
         shell: bash
         run: |
