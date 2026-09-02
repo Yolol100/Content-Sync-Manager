@@ -48,6 +48,7 @@ jobs:
         run: |
           php tests/static-audit.php
           php tests/ai-image-context-static.php
+          php tests/ai-media-index-static.php
 
       - name: Package hygiene
         shell: bash
@@ -58,6 +59,7 @@ jobs:
           test -f content-sync-manager.php
           test -f includes/manager.php
           test -f includes/ai-image-context.php
+          test -f includes/ai-media-index.php
           test -f assets/admin.js
           test -f assets/ai-image-context.js
           test -f assets/admin.css
@@ -74,6 +76,7 @@ jobs:
           test "$first_checksum" = "$second_checksum"
           php tests/static-audit.php
           php tests/ai-image-context-static.php
+          php tests/ai-media-index-static.php
 
   wordpress-best-practices:
     runs-on: ubuntu-24.04
