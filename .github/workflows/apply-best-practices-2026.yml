@@ -1,0 +1,66 @@
+name: Apply 2026 best-practices patch
+
+on:
+  push:
+    branches:
+      - chore/2026-best-practices
+    paths:
+      - .github/workflows/apply-best-practices-2026.yml
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout feature branch
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: true
+
+      - name: Setup PHP and Composer
+        uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240 # 2.37.2
+        with:
+          php-version: '8.3'
+          coverage: none
+          tools: composer:v2
+
+      - name: Apply audited patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          python scripts/apply_best_practices_2026.py
+          composer update --no-interaction --prefer-dist --no-progress
+          composer validate --strict --no-interaction
+          composer audit --locked --format=json
+
+      - name: Pre-commit syntax and regressions
+        shell: bash
+        run: |
+          set -euo pipefail
+          while IFS= read -r -d '' file; do
+            php -l "$file"
+          done < <(find . -type f -name '*.php' -not -path './vendor/*' -not -path './.git/*' -print0)
+          node --check assets/admin.js
+          node --check assets/ai-image-context.js
+          php tests/static-audit.php
+          php tests/ai-image-context-static.php
+
+      - name: Show WPCS findings before commit
+        shell: bash
+        run: |
+          vendor/bin/phpcs --standard=phpcs.xml.dist || true
+
+      - name: Commit generated hardening
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          git diff --cached --quiet && exit 0
+          git commit -m 'Harden plugin for 2026 WordPress best practices'
+          git push origin HEAD:chore/2026-best-practices
