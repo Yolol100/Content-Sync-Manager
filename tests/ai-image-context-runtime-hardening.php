@@ -127,6 +127,28 @@ $assert(($builder_preview['items'][0]['status'] ?? '') === 'partial', 'Builder m
 $assert(empty($builder_preview['items'][0]['rename_allowed']), 'Builder metadata URL usage must block the physical rename.');
 
 delete_post_meta($builder_post_id, '_elementor_data');
+update_post_meta($builder_post_id, '_dca_tb_backups', [[
+    'created' => current_time('mysql'),
+    'source' => 'runtime-hardening',
+    'textblock' => "Archived Content Sync snapshot\n" . $thumbnail_url,
+]]);
+
+$archive_scan = dca_tb_ai_image_context_site_usage_scan([$attachment_id]);
+$archive_entries = isset($archive_scan['usage'][$attachment_id]) ? $archive_scan['usage'][$attachment_id] : [];
+$archive_blocked = false;
+foreach ($archive_entries as $entry) {
+    if (!empty($entry['unsafe_private_meta']) || in_array('meta:_dca_tb_backups', (array) ($entry['sources'] ?? []), true)) {
+        $archive_blocked = true;
+        break;
+    }
+}
+$assert(!$archive_blocked, 'Content Sync archival backup metadata must not be treated as live builder/private media usage.');
+
+$archive_preview = dca_tb_ai_image_context_preview_media_import($rename_import($import_block, 'archive-safe-name'));
+$assert(!is_wp_error($archive_preview), 'Archive-only rename preview failed unexpectedly.');
+$assert(($archive_preview['items'][0]['status'] ?? '') === 'success', 'Archive-only metadata must not downgrade a safe rename preview.');
+$assert(!empty($archive_preview['items'][0]['rename_allowed']), 'Archive-only metadata must not block a safe physical rename.');
+delete_post_meta($builder_post_id, '_dca_tb_backups');
 
 $author_login = 'content-sync-author-' . strtolower($token);
 $author_id = wp_create_user($author_login, wp_generate_password(24, true, true), $author_login . '@example.invalid');

@@ -776,6 +776,26 @@ function dca_tb_ai_image_context_collect_target_attachment_ids($value, $targets,
     return array_values(array_filter(array_map('absint', array_keys($found))));
 }
 
+function dca_tb_ai_image_context_private_meta_is_archival($meta_key) {
+    $meta_key = (string) $meta_key;
+
+    if ($meta_key === '') {
+        return false;
+    }
+
+    if (strpos($meta_key, '_dca_tb_') === 0) {
+        return true;
+    }
+
+    return in_array($meta_key, [
+        '_edit_lock',
+        '_edit_last',
+        '_wp_old_slug',
+        '_wp_trash_meta_status',
+        '_wp_trash_meta_time',
+    ], true);
+}
+
 function dca_tb_ai_image_context_private_meta_url_refs($post_id, $url_targets) {
     $post_id = absint($post_id);
     $refs = [];
@@ -791,7 +811,7 @@ function dca_tb_ai_image_context_private_meta_url_refs($post_id, $url_targets) {
 
     foreach ($all_meta as $meta_key => $values) {
         $meta_key = (string) $meta_key;
-        if ($meta_key === '' || strpos($meta_key, '_') !== 0) {
+        if ($meta_key === '' || strpos($meta_key, '_') !== 0 || dca_tb_ai_image_context_private_meta_is_archival($meta_key)) {
             continue;
         }
 
