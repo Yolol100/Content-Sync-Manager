@@ -3,7 +3,7 @@
 ### 1.2.62
 - AI Media: exportknoppen werken in Media Bibliotheek lijst- en rasterweergave en lezen alleen de geselecteerde afbeeldingen.
 - Preview: tijdelijke 512 px- en 1024 px-previews worden zonder onnodige crop gemaakt, met automatische opschoning en fail-closed fallback; bestaande fallback-resizes worden alleen gebruikt wanneer crop uit staat en de originele beeldverhouding behouden blijft.
-- Context: export bevat een WordPress-gebruiksscan en exacte ACF-paden voor gallery, group, repeater en flexible content waar beschikbaar; vaste media-URLs in private/buildermetadata zoals Elementor `_elementor_data` worden als onveilige rename-locatie gedetecteerd.
+- Context: export bevat een WordPress-gebruiksscan en exacte ACF-paden voor gallery, group, repeater en flexible content waar beschikbaar; vaste media-URLs in private/buildermetadata zoals Elementor `_elementor_data` worden als onveilige rename-locatie gedetecteerd. Interne Content Sync-archiefmeta zoals `_dca_tb_backups` wordt daarbij uitgesloten om false positives te voorkomen.
 - Round-trip: `MEDIA IMPORT` gebruikt een collision-safe JSON-regel voor nieuwe exports, terwijl oude labelblokken backwards compatible importeerbaar blijven.
 - Safety: import vereist exact-preview binding en expliciete bevestiging; fysieke hernoeming wordt geblokkeerd bij een onvolledige scan, onveilige/niet-ondersteunde opslaglocaties of wanneer de huidige gebruiker niet iedere betrokken gebruikspagina mag bewerken.
 - Quality: regressie- en runtimecoverage omvat AI-media-export/import, fysieke rename, geneste ACF-paden, builder/private metadata, gebruikspagina-rechten, delimiterteksten en cropfallbacks.
