@@ -1,5 +1,6 @@
 document.addEventListener('DOMContentLoaded', function () {
     const settings = window.dcaTbAiImageContextSettings || window.dcaTbSettings || {};
+    const { __, sprintf } = window.wp.i18n;
     const nonce = settings.nonce;
     const ajaxUrl = window.ajaxurl || settings.ajaxUrl || '';
     const mediaScreen = settings.screen === 'media' || document.body.classList.contains('upload-php');
@@ -99,7 +100,7 @@ document.addEventListener('DOMContentLoaded', function () {
         if (!response.ok || !payload || !payload.success || !payload.data) {
             const message = payload && payload.data && payload.data.message
                 ? payload.data.message
-                : 'De Content Sync-actie is mislukt.';
+                : __('De Content Sync-actie is mislukt.', 'content-sync-manager');
             throw new Error(message);
         }
 
@@ -117,7 +118,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 resolve(String(reader.result || ''));
             };
             reader.onerror = function () {
-                reject(new Error('Het TXT-bestand kon niet worden gelezen.'));
+                reject(new Error(__('Het TXT-bestand kon niet worden gelezen.', 'content-sync-manager')));
             };
             reader.readAsText(file);
         });
@@ -137,7 +138,7 @@ document.addEventListener('DOMContentLoaded', function () {
         exportButton.type = 'button';
         exportButton.className = opts.grid ? 'button media-button' : 'button';
         exportButton.dataset.dcaAiImageContext = '1';
-        exportButton.textContent = 'AI afbeeldingen export';
+        exportButton.textContent = __('AI afbeeldingen export', 'content-sync-manager');
         wrapper.appendChild(exportButton);
 
         const status = document.createElement('span');
@@ -149,13 +150,13 @@ document.addEventListener('DOMContentLoaded', function () {
             const ids = selectedIds();
             if (!ids.length) {
                 window.alert(mediaScreen
-                    ? 'Selecteer eerst minimaal een afbeelding. Gebruik in de rasterweergave eerst Bulkselectie.'
-                    : 'Selecteer eerst minimaal een pagina, bericht of product.');
+                    ? __('Selecteer eerst minimaal een afbeelding. Gebruik in de rasterweergave eerst Bulkselectie.', 'content-sync-manager')
+                    : __('Selecteer eerst minimaal een pagina, bericht of product.', 'content-sync-manager'));
                 return;
             }
 
             exportButton.disabled = true;
-            status.textContent = 'AI-afbeeldingscontext wordt gemaakt.';
+            status.textContent = __('AI-afbeeldingscontext wordt gemaakt.', 'content-sync-manager');
 
             try {
                 const data = await postAction('dca_ai_image_context_export', {
@@ -163,12 +164,12 @@ document.addEventListener('DOMContentLoaded', function () {
                     ids: ids,
                 });
                 if (!data.text) {
-                    throw new Error('De export bevat geen tekst.');
+                    throw new Error(__('De export bevat geen tekst.', 'content-sync-manager'));
                 }
                 downloadText(data.text, data.filename);
-                status.textContent = 'AI-afbeeldingscontext is geexporteerd.';
+                status.textContent = __('AI-afbeeldingscontext is geexporteerd.', 'content-sync-manager');
             } catch (error) {
-                const message = error instanceof Error ? error.message : 'AI-afbeeldingscontext exporteren is mislukt.';
+                const message = error instanceof Error ? error.message : __('AI-afbeeldingscontext exporteren is mislukt.', 'content-sync-manager');
                 window.alert(message);
                 status.textContent = message;
             } finally {
@@ -181,7 +182,7 @@ document.addEventListener('DOMContentLoaded', function () {
             importButton.type = 'button';
             importButton.className = opts.grid ? 'button media-button' : 'button';
             importButton.dataset.dcaAiImageImport = '1';
-            importButton.textContent = 'AI data importeren';
+            importButton.textContent = __('AI data importeren', 'content-sync-manager');
 
             const fileInput = document.createElement('input');
             fileInput.type = 'file';
@@ -205,7 +206,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
                 importButton.disabled = true;
                 exportButton.disabled = true;
-                status.textContent = 'AI-media-import wordt gecontroleerd.';
+                status.textContent = __('AI-media-import wordt gecontroleerd.', 'content-sync-manager');
 
                 try {
                     const text = await readTextFile(file);
@@ -216,19 +217,19 @@ document.addEventListener('DOMContentLoaded', function () {
                     const renameBlocked = parseInt(preview.rename_blocked || 0, 10);
 
                     if (!importable) {
-                        throw new Error('Geen geldige media-items gevonden om te importeren. Fouten: ' + errors + '.');
+                        throw new Error(sprintf(__('Geen geldige media-items gevonden om te importeren. Fouten: %d.', 'content-sync-manager'), errors));
                     }
 
-                    const confirmed = window.confirm(
-                        'Controle voltooid. Importabele afbeeldingen: ' + importable
-                        + '. Wijzigingen: ' + changes
-                        + '. Fouten: ' + errors
-                        + '. Veilig geblokkeerde hernoemingen: ' + renameBlocked
-                        + '. Doorgaan met importeren?'
-                    );
+                    const confirmed = window.confirm(sprintf(
+                        __('Controle voltooid. Importabele afbeeldingen: %1$d. Wijzigingen: %2$d. Fouten: %3$d. Veilig geblokkeerde hernoemingen: %4$d. Doorgaan met importeren?', 'content-sync-manager'),
+                        importable,
+                        changes,
+                        errors,
+                        renameBlocked
+                    ));
 
                     if (!confirmed) {
-                        status.textContent = 'AI-media-import geannuleerd.';
+                        status.textContent = __('AI-media-import geannuleerd.', 'content-sync-manager');
                         return;
                     }
 
@@ -237,11 +238,11 @@ document.addEventListener('DOMContentLoaded', function () {
                         preview_hash: preview.preview_hash,
                         destructive_confirm: '1',
                     });
-                    window.alert(result.message || 'AI-media-import is voltooid.');
-                    status.textContent = 'AI-media-import is voltooid.';
+                    window.alert(result.message || __('AI-media-import is voltooid.', 'content-sync-manager'));
+                    status.textContent = __('AI-media-import is voltooid.', 'content-sync-manager');
                     window.location.reload();
                 } catch (error) {
-                    const message = error instanceof Error ? error.message : 'AI-media-import is mislukt.';
+                    const message = error instanceof Error ? error.message : __('AI-media-import is mislukt.', 'content-sync-manager');
                     window.alert(message);
                     status.textContent = message;
                 } finally {

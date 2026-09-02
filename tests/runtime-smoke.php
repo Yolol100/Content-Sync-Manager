@@ -17,7 +17,7 @@ $assert = static function (bool $condition, string $message): void {
 
 wp_set_current_user(1);
 $assert(current_user_can('manage_options'), 'Runtime user must be an administrator.');
-$assert(defined('DCA_TB_VERSION') && DCA_TB_VERSION === '1.2.62', 'Installed plugin version is not 1.2.62.');
+$assert(defined('DCA_TB_VERSION') && DCA_TB_VERSION === '1.2.63', 'Installed plugin version is not 1.2.63.');
 
 foreach ([
     'dca_tb_build_bulk_export',

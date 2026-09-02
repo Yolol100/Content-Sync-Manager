@@ -1,5 +1,11 @@
 # Content Sync Manager changelog
 
+### 1.2.63
+- Compatibility: WordPress 7.1 toegevoegd aan de echte runtime-matrix op PHP 8.3 en 8.5; bestaande minimum- en WooCommerce-baselines blijven behouden.
+- Quality: officiële Plugin Check-validatie, WPCS/PHPCS en `composer audit --locked` toegevoegd als CI-gates.
+- I18n: gebruikersgerichte admin-JavaScripttekst gebruikt nu WordPress `wp-i18n` en script translations.
+- Accessibility: regressiegates bewaken dialogsemantiek, live regions en focusgedrag; volledige WCAG-conformance blijft browser-/screenreaderbewijs vereisen.
+
 ### 1.2.62
 - AI Media: exportknoppen werken in Media Bibliotheek lijst- en rasterweergave en lezen alleen de geselecteerde afbeeldingen.
 - Preview: tijdelijke 512 px- en 1024 px-previews worden zonder onnodige crop gemaakt, met automatische opschoning en fail-closed fallback; bestaande fallback-resizes worden alleen gebruikt wanneer crop uit staat en de originele beeldverhouding behouden blijft.

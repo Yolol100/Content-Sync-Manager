@@ -63,10 +63,12 @@ function dca_tb_enqueue_ai_image_context_assets() {
     wp_enqueue_script(
         'dca-tb-ai-image-context',
         DCA_TB_PLUGIN_URL . 'assets/ai-image-context.js',
-        [],
-        DCA_TB_VERSION . '-ai-image-3',
+        ['wp-i18n'],
+        DCA_TB_VERSION . '-ai-image-4',
         true
     );
+
+    wp_set_script_translations('dca-tb-ai-image-context', 'content-sync-manager');
 
     global $pagenow;
     wp_localize_script('dca-tb-ai-image-context', 'dcaTbAiImageContextSettings', [
@@ -1513,13 +1515,9 @@ function dca_tb_ajax_ai_image_context_export() {
 
     dca_tb_require_ajax_access();
 
-    $scope = isset($_POST['scope']) ? sanitize_key(wp_unslash($_POST['scope'])) : 'content';
-    $raw_ids = isset($_POST['ids']) ? wp_unslash($_POST['ids']) : [];
-    if (!is_array($raw_ids)) {
-        wp_send_json_error(['message' => 'Ongeldige selectie.'], 400);
-    }
-
-    $ids = array_values(array_unique(array_filter(array_map('absint', $raw_ids))));
+    $scope = sanitize_key(dca_tb_post_text('scope'));
+    $scope = $scope !== '' ? $scope : 'content';
+    $ids = dca_tb_post_id_list('ids');
 
     if ($scope === 'media') {
         if (!$ids) {
@@ -1567,7 +1565,7 @@ function dca_tb_ajax_ai_image_context_import_preview() {
     }
 
     dca_tb_require_ajax_access();
-    $text = isset($_POST['text']) ? wp_unslash((string) $_POST['text']) : '';
+    $text = dca_tb_post_text('text');
     $size_check = dca_tb_ai_image_context_validate_import_text($text);
     if (is_wp_error($size_check)) {
         wp_send_json_error(['message' => $size_check->get_error_message()], 400);
@@ -1596,7 +1594,7 @@ function dca_tb_ajax_ai_image_context_import_run() {
     }
 
     dca_tb_require_ajax_access();
-    $text = isset($_POST['text']) ? wp_unslash((string) $_POST['text']) : '';
+    $text = dca_tb_post_text('text');
     $size_check = dca_tb_ai_image_context_validate_import_text($text);
     if (is_wp_error($size_check)) {
         wp_send_json_error(['message' => $size_check->get_error_message()], 400);

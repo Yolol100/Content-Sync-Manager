@@ -40,6 +40,7 @@ $assert(strpos($module, "dca_tb_require_matching_import_preview(\$text)") !== fa
 $assert(strpos($module, "dca_tb_require_destructive_confirmation()") !== false, 'AI image import must require an explicit destructive confirmation.');
 $assert(strpos($module, "\$pagenow === 'upload.php'") !== false, 'AI image context assets must load on the Media Library screen.');
 $assert(strpos($module, "wp_localize_script('dca-tb-ai-image-context', 'dcaTbAiImageContextSettings'") !== false, 'Media Library export must receive its own nonce and AJAX settings.');
+$assert(strpos($module, "['wp-i18n']") !== false && strpos($module, "wp_set_script_translations('dca-tb-ai-image-context', 'content-sync-manager')") !== false, 'AI Media JavaScript must load through WordPress i18n.');
 $assert(strpos($module, 'DCA_TB_AI_IMAGE_CONTEXT_PREVIEW_MAX') !== false && strpos($module, '512') !== false, 'Primary AI preview limit is missing.');
 $assert(strpos($module, 'DCA_TB_AI_IMAGE_CONTEXT_DETAIL_PREVIEW_MAX') !== false && strpos($module, '1024') !== false, 'Detail AI preview limit is missing.');
 $assert(strpos($module, 'wp_get_image_editor') !== false, 'AI image context must generate a real downsized preview when needed.');
@@ -86,7 +87,7 @@ $assert(strpos($script, "state.get('selection')") !== false, 'Media grid AI expo
 $assert(strpos($script, '.select-mode-toggle-button') !== false, 'Media grid controls must be placed beside the WordPress Bulk Select toggle.');
 $assert(strpos($script, 'MutationObserver') !== false, 'Media grid controls must survive WordPress toolbar re-renders.');
 $assert(strpos($script, 'dca-ai-image-context-controls-grid media-button') !== false, 'Media grid controls must stay visible in WordPress select mode.');
-$assert(strpos($script, 'AI data importeren') !== false, 'Media Library AI import button is missing.');
+$assert(strpos($script, "__('AI data importeren', 'content-sync-manager')") !== false && strpos($script, 'window.wp.i18n') !== false, 'Media Library AI import button must use WordPress i18n.');
 $assert(strpos($script, "accept = '.txt,text/plain'") !== false, 'AI media import must accept TXT files only.');
 $assert(strpos($script, "preview_hash") !== false && strpos($script, "destructive_confirm") !== false, 'Client import must submit exact-preview binding and destructive confirmation.');
 $assert(strpos($script, "new Blob([text], { type: 'text/plain;charset=utf-8' })") !== false, 'AI export TXT download implementation is missing.');

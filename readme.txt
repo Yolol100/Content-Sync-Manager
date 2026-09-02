@@ -2,9 +2,9 @@
 Contributors: webactueel
 Tags: admin, acf, import, export
 Requires at least: 6.2
-Tested up to: 7.0
+Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 1.2.62
+Stable tag: 1.2.63
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -26,6 +26,13 @@ Vanaf 1.2.62 kan Media > Bibliotheek geselecteerde afbeeldingen in lijst- en ras
 4. Test eerst export, preview en daarna import.
 
 == Changelog ==
+
+= 1.2.63 =
+* Compatibility: schone runtimegates toegevoegd voor WordPress 7.1 op PHP 8.3 en PHP 8.5, naast de bestaande minimum- en WooCommerce-matrix.
+* Quality: officiële Plugin Check-validatie toegevoegd voor general, security, performance en accessibility checks.
+* Standards: WordPress Coding Standards/PHPCS en Composer dependency-audit toegevoegd als vaste CI-gate met gepinde tooling.
+* I18n: admin-JavaScript gebruikt nu WordPress wp-i18n en script translations in plaats van losse niet-lokaliseerbare UI-strings.
+* Accessibility: regressiechecks bewaken dialogsemantiek, live statusmeldingen, keyboard-focusgedrag en de i18n-laag; echte browser-/screenreadercontrole blijft staging-first.
 
 = 1.2.62 =
 * AI Media: exportknoppen werken in Media Bibliotheek lijst- en rasterweergave en lezen alleen de geselecteerde afbeeldingen.
