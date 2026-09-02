@@ -147,7 +147,7 @@ jobs:
           set -euo pipefail
           php wp-cli.phar plugin check content-sync-manager \
             --path=runtime-site \
-            --require=./wp-content/plugins/plugin-check/cli.php \
+            --require="$GITHUB_WORKSPACE/runtime-site/wp-content/plugins/plugin-check/cli.php" \
             --categories=general,security,performance,accessibility \
             --format=table
 
