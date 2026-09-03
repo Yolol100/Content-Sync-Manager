@@ -1,12 +1,29 @@
-# Content Sync Manager
+# Content Sync Manager — Safe WordPress Content & Media Workflows
 
-> **Portfoliostatus:** Actief ondersteunend · zelfstandig WordPress contentproduct
+> **Portfolio project · WordPress/PHP · ACF · WooCommerce · content import/export · guarded media updates**
 
-**Rol in het portfolio:** Content Sync Manager is een zelfstandige admin-only WordPress-plugin voor gecontroleerde TXT-export, preview, import en herstel. Voor GitHub-gebaseerde, conflictgestuurde contentreview is [Elementorconnector](https://github.com/Yolol100/Elementorconnector) het aparte bridgeproduct; beide producten behouden hun eigen veiligheids- en releasegrenzen.
+Content Sync Manager is an admin-only WordPress plugin for controlled export, review, import and recovery of website content and media. It is built for situations where teams need to update structured WordPress content efficiently without turning bulk editing into an uncontrolled write process.
 
-Admin-only mini-plugin voor TXT export/import van berichten, pagina’s, producten en ondersteunde custom post types met gedetecteerde ACF-velden, samenvattingen, uitgelichte afbeeldingen en media-metadata.
+**Built by:** [Andrew Baeten](https://github.com/Yolol100) · [Portfolio](https://andrewbaeten.nl)
 
-## Installatie
+## What problem it solves
+
+Bulk content and media work becomes risky when updates affect ACF fields, WooCommerce products, images or content used in page builders. Content Sync Manager adds preview-before-write checks, capability boundaries, backups/recovery paths and explicit confirmation around higher-risk operations.
+
+## Portfolio snapshot
+
+| Area | What it demonstrates |
+| --- | --- |
+| WordPress | Posts, pages, products and supported custom post types |
+| Structured content | Dynamic ACF field detection and validated import/export |
+| WooCommerce | Product content support within controlled WordPress workflows |
+| Media | Metadata context, image usage detection and guarded filename changes |
+| Safety | Preview binding, validation, permission checks, backups and fail-closed behaviour |
+| Delivery | Runtime matrices, Plugin Check, WPCS/PHPCS, Composer audit and deterministic release builds |
+
+For GitHub-based conflict-driven content review, see the separate [Elementorconnector](https://github.com/Yolol100/Elementorconnector) project.
+
+## Installation
 
 1. Upload de pluginmap of ZIP via WordPress.
 2. Activeer de plugin bij voorkeur eerst op staging.
@@ -109,3 +126,9 @@ python scripts/build_release.py
 - Quality: regressie- en runtimecoverage omvat AI-media-export/import, fysieke rename, geneste ACF-paden, Elementor/private metadata, permissiegrenzen, delimiterteksten en cropfallbacks.
 
 Zie [CHANGELOG.md](CHANGELOG.md) voor de volledige versiehistorie.
+
+## About the developer
+
+I am **Andrew Baeten**, a Senior WordPress Developer & Web Designer with 10+ years of experience across 70+ WordPress projects.
+
+[Portfolio](https://andrewbaeten.nl) · [LinkedIn](https://www.linkedin.com/in/andrew-baeten-305a1478/) · [Email](mailto:info@andrewbaeten.nl)
