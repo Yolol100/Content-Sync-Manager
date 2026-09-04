@@ -21,8 +21,6 @@ Bulk content and media work becomes risky when updates affect ACF fields, WooCom
 | Safety | Preview binding, validation, permission checks, backups and fail-closed behaviour |
 | Delivery | Runtime matrices, Plugin Check, WPCS/PHPCS, Composer audit and deterministic release builds |
 
-For GitHub-based conflict-driven content review, see the separate [Elementorconnector](https://github.com/Yolol100/Elementorconnector) project.
-
 ## Installation
 
 1. Upload de pluginmap of ZIP via WordPress.
