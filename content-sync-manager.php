@@ -33,6 +33,12 @@ define('DCA_TB_PLUGIN_FILE', __FILE__);
 define('DCA_TB_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('DCA_TB_PLUGIN_URL', plugin_dir_url(__FILE__));
 
+// Praktisch onbeperkt aantal items per bulkexport/-import. De bestaande
+// byte-, permissie-, preview- en validatiegrenzen blijven actief.
+if (!defined('DCA_TB_MAX_IMPORT_PAGES')) {
+    define('DCA_TB_MAX_IMPORT_PAGES', PHP_INT_MAX);
+}
+
 add_action('plugins_loaded', static function () {
     load_plugin_textdomain('content-sync-manager', false, dirname(plugin_basename(DCA_TB_PLUGIN_FILE)) . '/languages');
 });
