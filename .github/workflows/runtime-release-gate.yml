@@ -162,6 +162,10 @@ jobs:
             --path=runtime-site \
             --user=1
           php wp-cli.phar eval-file \
+            "$GITHUB_WORKSPACE/tests/universal-acf-export-runtime.php" \
+            --path=runtime-site \
+            --user=1
+          php wp-cli.phar eval-file \
             "$GITHUB_WORKSPACE/tests/ai-image-context-runtime-hardening.php" \
             --path=runtime-site \
             --user=1
