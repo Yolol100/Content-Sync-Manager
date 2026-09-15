@@ -78,6 +78,17 @@ jobs:
           php tests/ai-image-context-static.php
           php tests/ai-media-index-static.php
 
+      - name: Upload release package
+        if: matrix.php == '8.3'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: content-sync-manager-plugin
+          path: |
+            dist/content-sync-manager-*.zip
+            dist/content-sync-manager-*.zip.sha256
+          if-no-files-found: error
+          retention-days: 7
+
   wordpress-best-practices:
     runs-on: ubuntu-24.04
     timeout-minutes: 10
