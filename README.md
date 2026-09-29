@@ -21,51 +21,62 @@ Bulk content and media work becomes risky when updates affect ACF fields, WooCom
 | Safety | Preview binding, validation, permission checks, backups and fail-closed behaviour |
 | Delivery | Runtime matrices, Plugin Check, WPCS/PHPCS, Composer audit and deterministic release builds |
 
+## Quick technical review
+
+Useful places to inspect:
+
+- `tests/` — static and runtime coverage for content, media and ACF workflows.
+- `.github/workflows/quality.yml` — coding standards and dependency quality checks.
+- `.github/workflows/runtime-release-gate.yml` — clean WordPress runtime validation.
+- `scripts/build_release.py` — deterministic release-package construction.
+- `CHANGELOG.md` — full version history and release notes.
+- `readme.txt` — WordPress-style distribution metadata.
+
 ## Installation
 
-1. Upload de pluginmap of ZIP via WordPress.
-2. Activeer de plugin bij voorkeur eerst op staging.
-3. Open Pagina's, Berichten, Producten, een ondersteund custom post type of Media > Bibliotheek in de admin.
-4. Gebruik de Content Sync-toolbar of de AI-afbeeldingsknoppen in de Media Bibliotheek.
+1. Upload the plugin folder or ZIP through WordPress.
+2. Activate the plugin on staging first where possible.
+3. Open Pages, Posts, Products, a supported custom post type, or Media > Library in the admin.
+4. Use the Content Sync toolbar or the AI image controls in the Media Library.
 
-## AI-afbeeldingscontext
+## AI image context
 
-In Media > Bibliotheek werkt `AI afbeeldingen export` in zowel lijst- als rasterweergave. De export bevat per geselecteerde afbeelding de bestaande media-metadata, WordPress-gebruikslocaties, paginacontext, exacte ACF-paden voor image/gallery/group/repeater/flexible-content waar die beschikbaar zijn, plus tijdelijke niet-gecropte previews van maximaal 512 px en 1024 px.
+In Media > Library, `AI image export` works in both list and grid view. For each selected image, the export includes existing media metadata, WordPress usage locations, page context, exact ACF paths for image/gallery/group/repeater/flexible-content fields where available, plus temporary non-cropped previews up to 512 px and 1024 px.
 
-De tijdelijke previews worden in een aparte uploads-submap gemaakt en automatisch opgeschoond. Wanneer een tijdelijke preview niet kan worden gemaakt, wordt alleen een bestaande WordPress-resize gebruikt als die aantoonbaar niet gecropt is en dezelfde beeldverhouding als het origineel behoudt. Er worden geen externe AI- of trackingcalls vanuit de plugin gedaan.
+Temporary previews are created in a separate uploads subdirectory and cleaned up automatically. If a temporary preview cannot be created, an existing WordPress resize is used only when it is demonstrably uncropped and preserves the original aspect ratio. The plugin does not make external AI or tracking calls.
 
-ChatGPT kan in de export alleen de waarden `new_filename`, `title`, `alt`, `caption` en `description` in de JSON-regel onder `MEDIA IMPORT` aanpassen. JSON voorkomt dat gewone metadataregels zoals `Title:` of `EINDE MEDIA IMPORT` het importformaat kunnen breken. Oude 1.2.62-labelblokken blijven voor backwards compatibility importeerbaar.
+ChatGPT may only change the values `new_filename`, `title`, `alt`, `caption` and `description` in the JSON line under `MEDIA IMPORT`. JSON prevents ordinary metadata lines such as `Title:` or `EINDE MEDIA IMPORT` from breaking the import format. Legacy 1.2.62 label blocks remain importable for backwards compatibility.
 
-Daarna kan hetzelfde TXT-bestand via `AI data importeren` worden gecontroleerd en teruggeschreven. De import vereist dezelfde nonce/capabilitygrens als Content Sync, een preview-hash van exact dezelfde TXT-inhoud en een expliciete bevestiging. Bestandsnaamwijzigingen hergebruiken de bestaande veilige media-renamefunctie. Een fysieke hernoeming wordt fail-closed geblokkeerd als de gebruiksscan onvolledig is, als een vaste media-URL in private/buildermetadata zoals Elementor `_elementor_data` wordt gevonden, als een niet-ondersteunde opslaglocatie wordt gebruikt of als de huidige gebruiker niet iedere betrokken gebruikspagina mag bewerken. Veilige metadatawijzigingen kunnen dan nog wel doorgaan. Interne Content Sync-archiefmeta zoals `_dca_tb_backups` telt bewust niet als actieve gebruikslocatie.
+The same TXT file can then be checked and written back through `AI data import`. The import requires the same nonce/capability boundary as Content Sync, a preview hash of the exact TXT content and explicit confirmation. Filename changes reuse the existing guarded media-rename function. A physical rename fails closed when the usage scan is incomplete, when a fixed media URL is found in private/builder metadata such as Elementor `_elementor_data`, when an unsupported storage location is used, or when the current user cannot edit every affected usage page. Safe metadata updates can still continue. Internal Content Sync archive metadata such as `_dca_tb_backups` is intentionally not treated as an active usage location.
 
-## Veilig gebruik
+## Safe use
 
-- Test eerst op staging.
-- Maak vooraf een database- en uploads-back-up.
-- Gebruik altijd eerst `Controleer bestand` voordat je de normale Content Sync-import uitvoert.
-- De AI-media-import voert zelf eerst een server-side controle uit en bindt de uitvoering aan exact dezelfde TXT-inhoud.
-- Een import-run wordt server-side geblokkeerd wanneer de TXT-inhoud niet exact overeenkomt met de laatst gecontroleerde preview van dezelfde gebruiker.
-- Media hernoemen staat standaard aan via `DCA_TB_ALLOW_MEDIA_FILE_RENAME` en blijft achter de bestaande veiligheidschecks voor extensie, MIME-type, uploads-pad, doelbestand, gebruikslocaties, rechten en back-up.
+- Test on staging first.
+- Create a database and uploads backup before higher-risk operations.
+- Use `Check file` before running the normal Content Sync import.
+- The AI media import performs its own server-side validation and binds execution to the exact same TXT content.
+- An import run is blocked server-side when the TXT content does not exactly match the last checked preview for the same user.
+- Media renaming is enabled through `DCA_TB_ALLOW_MEDIA_FILE_RENAME` and remains behind the existing extension, MIME type, uploads-path, target-file, usage-location, permission and backup checks.
 
-## Vereisten
+## Requirements
 
 - WordPress 6.2+
 - PHP 7.4+
-- ACF 6.8.9 voor pagina-, product- en custom-post-typevelden wanneer die via ACF worden beheerd
-- Voor WooCommerce-producten: WordPress 6.9+ en WooCommerce 11.0.1
+- ACF 6.8.9 for page, product and custom-post-type fields managed through ACF
+- For WooCommerce products: WordPress 6.9+ and WooCommerce 11.0.1
 
-De releasegate bewaakt de laagste gedeclareerde combinatie WordPress 6.2.11/PHP 7.4/ACF 6.8.9, de bestaande WooCommerce-baseline WordPress 7.0.4/PHP 8.3/ACF 6.8.9/WooCommerce 11.0.1 en WordPress 7.1 op PHP 8.3 plus PHP 8.5. De WordPress 7.1/PHP 8.3-lane bevat eveneens WooCommerce 11.0.1. In iedere omgeving wordt de gebouwde ZIP schoon geïnstalleerd en geforceerd bijgewerkt. Daarna worden export, preview, import, importlog en herstel op echte WordPress-content uitgevoerd; de WooCommerce-matrices testen daarnaast een product en de AI-media-export/import met fysieke bestandsnaamwijziging. De AI-media hardeningtest controleert bovendien builder/private metadata, gebruikspagina-rechten, JSON round-trip met delimiterteksten en het weigeren van gecropte previewfallbacks. Plugin Check draait aanvullend in de stabiele WordPress 7.0.4/PHP 8.3-lane, terwijl WPCS/PHPCS en Composer audit in de quality gate draaien.
+The release gate covers the declared minimum combination WordPress 6.2.11/PHP 7.4/ACF 6.8.9, the existing WooCommerce baseline WordPress 7.0.4/PHP 8.3/ACF 6.8.9/WooCommerce 11.0.1, and WordPress 7.1 on PHP 8.3 plus PHP 8.5. The WordPress 7.1/PHP 8.3 lane also includes WooCommerce 11.0.1. In each environment, the built ZIP is clean-installed and force-updated. Export, preview, import, import log and recovery are then exercised on real WordPress content; the WooCommerce matrices also test a product and the AI media export/import flow with a physical filename change. The AI media hardening test additionally covers builder/private metadata, usage-page permissions, JSON round-tripping with delimiter text and rejection of cropped preview fallbacks. Plugin Check runs in the stable WordPress 7.0.4/PHP 8.3 lane, while WPCS/PHPCS and Composer audit run in the quality gate.
 
-Bekende testbeperking: WooCommerce 11.0.1 schrijft tijdens de WP-CLI-runtime één `_load_textdomain_just_in_time`-notice voor zijn eigen `woocommerce`-tekstdomein. De gate staat alleen die exact herkenbare upstreammelding toe en faalt bij iedere andere notice, warning, fatal of debugregel. De Content Sync-flows zelf moeten zonder eigen debugmelding slagen.
+Known test limitation: WooCommerce 11.0.1 emits one `_load_textdomain_just_in_time` notice for its own `woocommerce` text domain during the WP-CLI runtime. The gate allows only that exact recognized upstream notice and fails on any other notice, warning, fatal or debug entry. Content Sync flows themselves must complete without their own debug message.
 
-Wanneer ACF niet actief of niet volledig beschikbaar is, toont de plugin in de pagina-/productlijst een admin-waarschuwing. Imports met ACF-velden worden dan server-side geblokkeerd; berichtimports zonder ACF blijven bruikbaar. De Media Bibliotheek-export blijft bruikbaar voor normale WordPress-afbeeldingen, maar exacte ACF-paden zijn dan niet beschikbaar.
+When ACF is inactive or not fully available, the plugin shows an admin warning in the page/product list. Imports containing ACF fields are blocked server-side; post imports without ACF remain usable. The Media Library export still works for normal WordPress images, but exact ACF paths are then unavailable.
 
-## Configuratie
+## Configuration
 
-Deze constants kunnen vóór het laden van de plugin worden gezet:
+These constants can be set before the plugin loads:
 
 ```php
-define('DCA_TB_ALLOW_MEDIA_FILE_RENAME', true); // standaard aan
+define('DCA_TB_ALLOW_MEDIA_FILE_RENAME', true); // enabled by default
 define('DCA_TB_MAX_IMPORT_PAGES', 50);
 define('DCA_TB_MAX_IMPORT_BYTES', 5242880);
 define('DCA_TB_IMPORT_PREVIEW_TTL', 20 * MINUTE_IN_SECONDS);
@@ -77,29 +88,29 @@ define('DCA_TB_AI_IMAGE_CONTEXT_DETAIL_PREVIEW_MAX', 1024);
 define('DCA_TB_AI_IMAGE_CONTEXT_USAGE_SCAN_MAX_POSTS', 2000);
 ```
 
-## ACF-velden
+## ACF fields
 
-Pagina-, product- en custom-post-type-export gebruikt dynamische ACF-detectie. De plugin exporteert alleen velden die ACF op het betreffende item detecteert en importeert alleen velden die op het doelitem ook door ACF bestaan. Oude vaste ACF-layouts zoals hoofdtekst/titel_1/usp_1 worden niet meer teruggeschreven.
+Page, product and custom-post-type export uses dynamic ACF detection. The plugin exports only fields that ACF detects on the relevant item and imports only fields that also exist through ACF on the target item. Older fixed ACF layouts such as hoofdtekst/titel_1/usp_1 are no longer written back.
 
-Voor AI-afbeeldingscontext wordt aanvullend de raw ACF-structuur doorlopen zodat een afbeelding bijvoorbeeld als `acf:gallery[1]`, `acf:items[0].image` of `acf:flex[0]{hero}.image` kan worden gekoppeld. Deze paden zijn context voor analyse; de bestaande ACF-importcontracten worden er niet door vervangen.
+For AI image context, the raw ACF structure is also traversed so an image can be linked to paths such as `acf:gallery[1]`, `acf:items[0].image` or `acf:flex[0]{hero}.image`. These paths are analysis context; they do not replace the existing ACF import contracts.
 
-## Let op bij oude snippets/plugins
+## Legacy snippets/plugins
 
-Zet oude Code Snippets/WPCode-versies of oude pluginvarianten eerst uit voordat je deze versie activeert. De plugin blokkeert laden wanneer oude functies met dezelfde namen al actief zijn.
+Disable older Code Snippets/WPCode versions or older plugin variants before activating this version. The plugin blocks loading when legacy functions with the same names are already active.
 
-## Versie
+## Version
 
 1.2.63
 
-## Releaseproces
+## Release process
 
-1. Laat de quality gate en de geautomatiseerde schone WordPress-runtimegate slagen en test de plugin-ZIP daarna nog op een representatieve staginginstallatie met een back-up.
-2. Controleer dat de versie in de pluginheader, `DCA_TB_VERSION` en de `Stable tag` gelijk is.
-3. Maak pas daarna de bijpassende tag, bijvoorbeeld `v1.2.63`.
-4. De tagworkflow bouwt de ZIP tweemaal, vergelijkt de SHA-256-checksums en maakt een **conceptrelease** met ZIP en checksum.
-5. Publiceer het concept pas nadat export, preview, import en herstel in de ondersteunde WordPress/PHP-matrix zijn gecontroleerd en de Media Bibliotheek-UI op staging handmatig is bekeken.
+1. Pass the quality gate and automated clean WordPress runtime gate, then test the plugin ZIP on a representative staging installation with a backup.
+2. Confirm that the plugin-header version, `DCA_TB_VERSION` and `Stable tag` match.
+3. Only then create the matching tag, for example `v1.2.63`.
+4. The tag workflow builds the ZIP twice, compares SHA-256 checksums and creates a **draft release** with the ZIP and checksum.
+5. Publish the draft only after export, preview, import and recovery have been validated in the supported WordPress/PHP matrix and the Media Library UI has been manually reviewed on staging.
 
-Lokaal kan hetzelfde runtimepakket met Python 3 worden gebouwd:
+The same runtime package can be built locally with Python 3:
 
 ```shell
 python scripts/build_release.py
@@ -109,21 +120,21 @@ python scripts/build_release.py
 
 ### 1.2.63
 
-- Compatibility: WordPress 7.1-runtimecoverage toegevoegd op PHP 8.3 en 8.5 zonder de bestaande minimum- en WooCommerce-baselines te verwijderen.
-- Quality: officiële Plugin Check-validatie, WPCS/PHPCS en Composer dependency-audit toegevoegd aan CI.
-- I18n: de twee admin-JavaScriptbestanden gebruiken `wp-i18n` en `wp_set_script_translations()` voor gebruikersgerichte UI-tekst.
-- Accessibility: bestaande dialog-, live-region- en focuscontracten zijn als regressiegate vastgelegd; browser/screenreader blijft een aparte stagingtest.
+- Compatibility: added WordPress 7.1 runtime coverage on PHP 8.3 and 8.5 without removing the existing minimum and WooCommerce baselines.
+- Quality: added official Plugin Check validation, WPCS/PHPCS and Composer dependency audit to CI.
+- I18n: both admin JavaScript files use `wp-i18n` and `wp_set_script_translations()` for user-facing UI text.
+- Accessibility: existing dialog, live-region and focus contracts are covered as regression gates; browser/screen-reader review remains a separate staging test.
 
 ### 1.2.62
 
-- AI Media: exportknoppen werken in Media Bibliotheek lijst- en rasterweergave en lezen alleen de geselecteerde afbeeldingen.
-- Preview: tijdelijke 512 px- en 1024 px-previews worden zonder onnodige crop gemaakt, met automatische opschoning en fail-closed fallback; bestaande fallback-resizes moeten niet-gecropt zijn en de originele beeldverhouding behouden.
-- Context: export bevat een WordPress-gebruiksscan en exacte ACF-paden voor gallery, group, repeater en flexible content waar beschikbaar; vaste URLs in private/buildermetadata worden als onveilige rename-locatie gemarkeerd.
-- Round-trip: `MEDIA IMPORT` gebruikt een collision-safe JSON-regel; oude labelblokken blijven importeerbaar.
-- Safety: import vereist exact-preview binding en bevestiging; fysieke hernoeming wordt ook geblokkeerd als niet alle gebruikspagina's door de huidige gebruiker bewerkt mogen worden.
-- Quality: regressie- en runtimecoverage omvat AI-media-export/import, fysieke rename, geneste ACF-paden, Elementor/private metadata, permissiegrenzen, delimiterteksten en cropfallbacks.
+- AI Media: export controls work in Media Library list and grid views and read only the selected images.
+- Preview: temporary 512 px and 1024 px previews are created without unnecessary cropping, with automatic cleanup and fail-closed fallback; existing fallback resizes must be uncropped and preserve the original aspect ratio.
+- Context: export includes a WordPress usage scan and exact ACF paths for gallery, group, repeater and flexible content where available; fixed URLs in private/builder metadata are marked as unsafe rename locations.
+- Round-trip: `MEDIA IMPORT` uses a collision-safe JSON line; legacy label blocks remain importable.
+- Safety: import requires exact-preview binding and confirmation; physical renaming is also blocked when the current user cannot edit all usage pages.
+- Quality: regression and runtime coverage includes AI media export/import, physical rename, nested ACF paths, Elementor/private metadata, permission boundaries, delimiter text and crop fallbacks.
 
-Zie [CHANGELOG.md](CHANGELOG.md) voor de volledige versiehistorie.
+See [CHANGELOG.md](CHANGELOG.md) for the full version history.
 
 ## About the developer
 
