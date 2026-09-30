@@ -38,8 +38,8 @@ flowchart LR
 Useful places to inspect:
 
 - `tests/` — static and runtime coverage for content, media and ACF workflows.
-- `.github/workflows/quality.yml` — coding standards and dependency quality checks.
-- `.github/workflows/runtime-release-gate.yml` — clean WordPress runtime validation.
+- [`.github/workflows/quality.yml`](.github/workflows/quality.yml) — coding standards and dependency quality checks.
+- [`.github/workflows/runtime-release-gate.yml`](.github/workflows/runtime-release-gate.yml) — clean WordPress runtime validation.
 - `scripts/build_release.py` — deterministic release-package construction.
 - `CHANGELOG.md` — full version history and release notes.
 - `readme.txt` — WordPress-style distribution metadata.
