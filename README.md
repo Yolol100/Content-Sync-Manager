@@ -21,6 +21,18 @@ Bulk content and media work becomes risky when updates affect ACF fields, WooCom
 | Safety | Preview binding, validation, permission checks, backups and fail-closed behaviour |
 | Delivery | Runtime matrices, Plugin Check, WPCS/PHPCS, Composer audit and deterministic release builds |
 
+## Workflow at a glance
+
+```mermaid
+flowchart LR
+    A[Posts, pages, products and media] --> B[Export or AI media export]
+    B --> C[Review the generated file]
+    C --> D[Server-side validation and preview binding]
+    D --> E[Explicit confirmation]
+    E --> F[Controlled import or media update]
+    F --> G[Import log and recovery path]
+```
+
 ## Quick technical review
 
 Useful places to inspect:
