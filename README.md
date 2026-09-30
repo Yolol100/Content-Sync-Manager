@@ -138,6 +138,6 @@ See [CHANGELOG.md](CHANGELOG.md) for the full version history.
 
 ## About the developer
 
-I am **Andrew Baeten**, a Senior WordPress Developer & Web Designer with 10+ years of experience across **90+ WordPress projects** and ongoing management of **120+ websites and webshops**. My current work also includes ongoing maintenance, quality checks and improvements across a large WordPress and WooCommerce portfolio.
+I am **Andrew Baeten**, a Senior WordPress Developer with 10+ years of experience and **70+ delivered projects**. My current work also includes ongoing maintenance, quality checks and improvements across a large WordPress and WooCommerce portfolio.
 
 [Portfolio cases](https://andrewbaeten.nl/category/cases) · [LinkedIn](https://www.linkedin.com/in/andrew-baeten-305a1478/) · [Email](mailto:info@andrewbaeten.nl)
