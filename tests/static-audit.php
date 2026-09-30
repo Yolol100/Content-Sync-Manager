@@ -53,7 +53,7 @@ $assert(strpos($bootstrap, "function_exists('dca_tb_current_user_can_use_manager
 preg_match('/\* Version:\s*([0-9.]+)/', $bootstrap, $headerVersion);
 preg_match("/define\('DCA_TB_VERSION',\s*'([^']+)'\)/", $bootstrap, $constantVersion);
 preg_match('/Stable tag:\s*([^\r\n]+)/', $readme, $stableTag);
-preg_match('/## Versie\s+([0-9.]+)/s', $readmeMd, $readmeMdVersion);
+preg_match('/## (?:Version|Versie)\s+([0-9.]+)/s', $readmeMd, $readmeMdVersion);
 $assert(isset($headerVersion[1], $constantVersion[1]) && $headerVersion[1] === $constantVersion[1], 'Plugin header version and DCA_TB_VERSION must match.');
 $assert(isset($headerVersion[1], $stableTag[1]) && trim($stableTag[1]) === $headerVersion[1], 'readme Stable tag must match plugin version.');
 $assert(isset($headerVersion[1], $readmeMdVersion[1]) && $readmeMdVersion[1] === $headerVersion[1], 'README version must match plugin version.');
