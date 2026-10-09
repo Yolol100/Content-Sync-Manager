@@ -153,3 +153,7 @@ See [CHANGELOG.md](CHANGELOG.md) for the full version history.
 I am **Andrew Baeten**, a WordPress Developer with 10+ years of experience across **90+ WordPress projects** and ongoing responsibility for **120+ websites and webshops**. My current work also includes ongoing maintenance, quality checks and improvements across a large WordPress and WooCommerce portfolio.
 
 [Portfolio cases](https://andrewbaeten.nl/category/cases) · [LinkedIn](https://www.linkedin.com/in/andrew-baeten-305a1478/) · [Email](mailto:info@andrewbaeten.nl)
+
+## License
+
+GPL-2.0-or-later. See [the license file](LICENSE) for the applicable terms.
