@@ -6,6 +6,18 @@ Content Sync Manager is an admin-only WordPress plugin for controlled export, re
 
 **Developer profile:** [Andrew Baeten](https://github.com/Yolol100) · [GitHub project index](https://github.com/Yolol100?tab=repositories)
 
+## See the editing workflow
+
+| Content overview | Bulk editor |
+| :---: | :---: |
+| [![Content Sync Manager WordPress page overview screenshot](https://andrewbaeten.nl/wp-content/uploads/2026/06/content-sync-manager-wordpress-paginas-overzicht.png)](https://andrewbaeten.nl/content-sync-manager/) | [![Content Sync Manager bulk editor interface screenshot](https://andrewbaeten.nl/wp-content/uploads/2026/06/content-sync-manager-bulkeditor-modal.png)](https://andrewbaeten.nl/content-sync-manager/) |
+
+[See the illustrated Content Sync Manager case study](https://andrewbaeten.nl/content-sync-manager/).
+
+**In practical terms:** export selected content, review changes, validate the exact incoming file, confirm the import and use the recorded result or recovery path if needed. Editors can update structured content without giving a spreadsheet unrestricted access to WordPress.
+
+*These are public portfolio images, not a claim that every screen or import path has been tested in a live client environment. The exact tested scenarios and release limitations are documented below.*
+
 ## What problem it solves
 
 Bulk content and media work becomes risky when updates affect ACF fields, WooCommerce products, images or content used in page builders. Content Sync Manager adds preview-before-write checks, capability boundaries, backups/recovery paths and explicit confirmation around higher-risk operations.
