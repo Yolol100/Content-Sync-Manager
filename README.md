@@ -4,7 +4,7 @@
 
 Content Sync Manager is an admin-only WordPress plugin for controlled export, review, import and recovery of website content and media. It is built for situations where teams need to update structured WordPress content efficiently without turning bulk editing into an uncontrolled write process.
 
-**Developer profile:** [Andrew Baeten](https://github.com/Yolol100) · [Portfolio cases](https://andrewbaeten.nl/category/cases)
+**Developer profile:** [Andrew Baeten](https://github.com/Yolol100) · [GitHub project index](https://github.com/Yolol100?tab=repositories)
 
 ## What problem it solves
 
@@ -152,7 +152,7 @@ See [CHANGELOG.md](CHANGELOG.md) for the full version history.
 
 I am **Andrew Baeten**, a WordPress Developer with **10 years of experience**, **90 delivered projects** and responsibility for **120 websites and webshops**. My current work also includes ongoing maintenance, quality checks and improvements across a large WordPress and WooCommerce portfolio.
 
-[Portfolio cases](https://andrewbaeten.nl/category/cases) · [LinkedIn](https://www.linkedin.com/in/andrew-baeten-305a1478/) · [Email](mailto:info@andrewbaeten.nl)
+[GitHub project index](https://github.com/Yolol100?tab=repositories) · [LinkedIn](https://www.linkedin.com/in/andrew-baeten-305a1478/) · [Email](mailto:info@andrewbaeten.nl)
 
 ## License
 
