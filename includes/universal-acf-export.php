@@ -314,9 +314,8 @@ function dca_tb_universal_ajax_bulk_get_acf_textblocks() {
     ]);
 }
 
-// Replace only the two read-only export routes. Save/import/restore handlers remain
-// on the existing guarded code paths, so this change cannot widen write access.
-remove_all_actions('wp_ajax_dca_get_acf_textblock');
-remove_all_actions('wp_ajax_dca_bulk_get_acf_textblocks');
+// Register the canonical read-only export routes without clearing callbacks
+// that other WordPress components may have registered on these hooks.
+// Save/import/restore handlers remain on their existing guarded paths.
 add_action('wp_ajax_dca_get_acf_textblock', 'dca_tb_universal_ajax_get_acf_textblock');
 add_action('wp_ajax_dca_bulk_get_acf_textblocks', 'dca_tb_universal_ajax_bulk_get_acf_textblocks');
