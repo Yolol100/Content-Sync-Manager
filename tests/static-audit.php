@@ -30,6 +30,7 @@ $read = static function (string $path) use ($root, $assert): string {
 
 $bootstrap = $read('content-sync-manager.php');
 $manager = $read('includes/manager.php');
+$universalExport = $read('includes/universal-acf-export.php');
 $adminJs = $read('assets/admin.js');
 $readme = $read('readme.txt');
 $readmeMd = $read('README.md');
@@ -65,9 +66,12 @@ $assert(!is_file($root . '/manager.php'), 'Misplaced root manager.php must not e
 
 $assert(strpos($manager, "apply_filters('dca_tb_manager_capability', 'manage_options')") !== false, 'Manager capability contract changed unexpectedly.');
 $assert(strpos($manager, "check_ajax_referer('dca_acf_textblock_nonce', 'nonce', false)") !== false, 'AJAX nonce verification is missing.');
-$assert(strpos($manager, "wp_ajax_dca_get_acf_textblock") !== false, 'Single export AJAX route is missing.');
-$assert(strpos($manager, "wp_ajax_dca_bulk_get_acf_textblocks") !== false, 'Bulk export AJAX route is missing.');
-$assert(strpos($manager, "'filename' => 'content-sync-' ") !== false, 'Bulk TXT filename response contract is missing.');
+$assert(strpos($universalExport, "add_action('wp_ajax_dca_get_acf_textblock'") !== false, 'Canonical single export route is missing.');
+$assert(strpos($universalExport, "add_action('wp_ajax_dca_bulk_get_acf_textblocks'") !== false, 'Canonical bulk export route is missing.');
+$assert(strpos($manager, "add_action('wp_ajax_dca_get_acf_textblock'") === false, 'Superseded single export callback remains registered.');
+$assert(strpos($manager, "add_action('wp_ajax_dca_bulk_get_acf_textblocks'") === false, 'Superseded bulk export callback remains registered.');
+$assert(strpos($universalExport, 'remove_all_actions(') === false, 'Export bootstrap must not erase other plugins\' AJAX callbacks.');
+$assert(strpos($universalExport, "'filename' => 'content-sync-' ") !== false, 'Bulk TXT filename response contract is missing.');
 $assert(strpos($manager, "if (\$post->post_type === 'page' && dca_tb_template_skip_reason(\$post_id) !== '')") !== false, 'Bulk export template restriction must apply only to pages so posts and products are not silently skipped.');
 
 $assert(strpos($adminJs, "ajax('dca_get_acf_textblock'") !== false, 'Client single export action does not match server route.');

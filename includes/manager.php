@@ -4019,42 +4019,6 @@ function dca_tb_require_ajax_access() {
     dca_tb_require_manager_access();
 }
 
-add_action('wp_ajax_dca_get_acf_textblock', function () {
-    dca_tb_require_ajax_access();
-
-    $object_type = dca_tb_get_request_object_type();
-
-    if ($object_type === 'term') {
-        $term_id = dca_tb_post_int('term_id');
-        $taxonomy = sanitize_key(dca_tb_post_text('taxonomy'));
-        $term = get_term($term_id, $taxonomy);
-
-        if (!dca_tb_can_edit_term($term_id, $taxonomy) || !$term || is_wp_error($term)) {
-            wp_send_json_error(['message' => 'Geen toegang tot deze categorie.']);
-        }
-
-        $term_link = get_term_link($term, $taxonomy);
-
-        wp_send_json_success([
-            'title'    => $term->name,
-            'text'     => dca_tb_build_term_textblock($term_id, $taxonomy),
-            'view_url' => !is_wp_error($term_link) ? $term_link : '',
-        ]);
-    }
-
-    $post_id = dca_tb_post_int('post_id');
-
-    if (!dca_tb_can_edit_post($post_id)) {
-        wp_send_json_error(['message' => 'Geen toegang tot deze pagina.']);
-    }
-
-    wp_send_json_success([
-        'title'    => get_the_title($post_id),
-        'text'     => dca_tb_build_textblock($post_id),
-        'view_url' => get_permalink($post_id),
-    ]);
-});
-
 add_action('wp_ajax_dca_save_acf_textblock', function () {
     dca_tb_require_ajax_access();
     dca_tb_require_destructive_confirmation();
@@ -4095,37 +4059,6 @@ add_action('wp_ajax_dca_save_acf_textblock', function () {
     }
 
     wp_send_json_success(['message' => $message]);
-});
-
-add_action('wp_ajax_dca_bulk_get_acf_textblocks', function () {
-    dca_tb_require_ajax_access();
-
-    $object_type = dca_tb_get_request_object_type();
-    $taxonomy = sanitize_key(dca_tb_post_text('taxonomy'));
-    $object_ids = dca_tb_post_id_list('object_ids');
-
-    if (!$object_ids) {
-        $object_ids = dca_tb_post_id_list('post_ids');
-    }
-
-    if (!$object_ids) {
-        wp_send_json_error(['message' => 'Selecteer eerst één of meerdere items.']);
-    }
-
-    if (count($object_ids) > DCA_TB_MAX_IMPORT_PAGES) {
-        wp_send_json_error(['message' => 'Export bevat ' . count($object_ids) . ' items. Maximaal toegestaan: ' . absint(DCA_TB_MAX_IMPORT_PAGES) . '.']);
-    }
-
-    $text = dca_tb_build_bulk_export($object_ids, $object_type, $taxonomy);
-
-    if (is_wp_error($text)) {
-        wp_send_json_error(['message' => $text->get_error_message()]);
-    }
-
-    wp_send_json_success([
-        'text'     => $text,
-        'filename' => 'content-sync-' . date_i18n('Y-m-d-H-i', current_time('timestamp')) . '.txt',
-    ]);
 });
 
 add_action('wp_ajax_dca_txt_import_preview', function () {
